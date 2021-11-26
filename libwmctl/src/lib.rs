@@ -1,20 +1,20 @@
 use x11rb::connection::Connection;
-use tracing::{info};
+use tracing::{debug};
 
 pub fn info() {
-    info!("vfs lib here");
+    debug!("");
 
-     // Open the connection to the X server. Use the DISPLAY environment variable.
-     let (conn, screen_num) = x11rb::connect(None).unwrap();
+    // Open the connection to the X server. Use the DISPLAY environment variable.
+    let (conn, screen_num) = x11rb::connect(None).unwrap();
 
-     // Get the screen #screen_num
-     let screen = &conn.setup().roots[screen_num];
+    // Get the screen #screen_num
+    let screen = &conn.setup().roots[screen_num];
  
-     println!();
-     println!("Informations of screen {}:", screen.root);
-     println!("  width.........: {}", screen.width_in_pixels);
-     println!("  height........: {}", screen.height_in_pixels);
-     println!();
+    println!();
+    println!("Informations of screen {}:", screen.root);
+    println!("  width.........: {}", screen.width_in_pixels);
+    println!("  height........: {}", screen.height_in_pixels);
+    println!();
 }
 
 #[cfg(test)]
