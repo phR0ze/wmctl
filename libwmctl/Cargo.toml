@@ -8,3 +8,5 @@ description = "Rust X11 automation"
 repository = "https://github.com/phR0ze/wmctl"
 
 [dependencies]
+x11rb = "0.9.0"
+tracing = "0.1"

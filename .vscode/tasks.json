@@ -11,14 +11,6 @@
             }
         },
         {
-            "label": "Run",
-            "type": "shell",
-            "command": "cargo run",
-            "group": {
-                "kind": "test"
-            }
-        },
-        {
             "label": "Test",
             "type": "shell",
             "command": "cargo test --all-features",
@@ -26,6 +18,11 @@
                 "kind": "test",
                 "isDefault": true
             }
+        },
+        {
+            "label": "Run",
+            "type": "shell",
+            "command": "cargo run"
         }
     ]
 }
