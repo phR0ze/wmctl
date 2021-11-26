@@ -1,0 +1,10 @@
+[package]
+name = "libwmctl"
+version = "0.0.1"
+edition = "2021"
+authors = ["phR0ze"]
+license = "MIT OR Apache-2.0"
+description = "Rust X11 automation"
+repository = "https://github.com/phR0ze/wmctl"
+
+[dependencies]

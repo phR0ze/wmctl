@@ -1,0 +1,12 @@
+
+pub fn test() {
+    println!("\nvfs lib here");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+}
