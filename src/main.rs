@@ -8,7 +8,7 @@ pub const APP_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 pub const APP_GIT_COMMIT: &str = env!("APP_GIT_COMMIT");
 pub const APP_BUILD_DATE: &str = env!("APP_BUILD_DATE");
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     logger::init();
 
     println!("\n{} - {}", APP_NAME.cyan(), APP_DESCRIPTION);
@@ -17,7 +17,16 @@ fn main() {
     println!("{:<w$} {}", "Build Date:", APP_BUILD_DATE, w = 18);
     println!("{:<w$} {}", "Git Commit:", APP_GIT_COMMIT, w = 18);
 
-    libwmctl::info();
+    let (_, display) = libwmctl::connect()?;
+    println!();
+    println!("Display information:");
+    println!("  width.........: {}", display.width);
+    println!("  height........: {}", display.height);
+    println!();
+
+    libwmctl::test()?;
+
+    Ok(())
 }
 
 // fn info() {
