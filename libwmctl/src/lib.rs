@@ -47,14 +47,9 @@ fn init() -> Result<Display> {
 pub fn test() -> Result<()> {
     let display = init()?;
     let win = active_window(&display)?;
-    println!("win: 0x{:x}", win); // win id same as wmctrl
     let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
-    println!("flags: {}", flags); // 3840 same as wmctrl
-    let (conn, _) = xcb::Connection::connect(None)?;
-    xcb::configure_window(&conn, win, &[(xcb::CONFIG_WINDOW_WIDTH as u16, 1700), (xcb::CONFIG_WINDOW_HEIGHT as u16, 1100)]).request_check()?;
-    //ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, 0, 0, 1600, 1100);
-    conn.flush();
-    //ewmh::send_client_message(&display.conn, win, win, display.conn.MOVERESIZE_WINDOW(), &[flags, 20, 20, 1800, 1100]);
+    ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, 20, 0, 1700, 1100).request_check()?;
+    display.flush();
     Ok(())
 }
 
