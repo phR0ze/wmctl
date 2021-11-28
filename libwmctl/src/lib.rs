@@ -48,13 +48,17 @@ pub fn test() -> Result<()> {
     let display = init()?;
     let win = active_window(&display)?;
 
+    // Remove maximizing states
+    ewmh::request_change_wm_state(&display.conn, display.screen, win, ewmh::STATE_REMOVE, display.conn.WM_ACTION_MAXIMIZE_HORZ(), display.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
+
     // Calculate 75% of display size
-    let (w, h) =  ((display.width as f64 * 0.75) as i32, (display.height as f64 * 0.75) as i32);
+    let (w, h) =  ((display.width as f64 * 0.90) as i32, (display.height as f64 * 0.90) as i32);
 
     // Center the window on the screen
     let status_bar = 26;
     let (x, y) =  ((display.width - w)/2, (display.height - h - status_bar)/2);
 
+    // Resize and position
     let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
     ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
     display.flush();
