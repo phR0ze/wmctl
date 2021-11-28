@@ -20,8 +20,8 @@ pub mod prelude {
 struct Display {
     conn: ewmh::Connection,
     screen: i32,
-    width: u16,
-    height: u16,
+    width: i32,
+    height: i32,
 }
 impl Deref for Display {
 	type Target = xcb::Connection;
@@ -40,15 +40,23 @@ fn init() -> Result<Display> {
     };
     Ok(Display{
         conn: ewmh::Connection::connect(conn).map_err(|(e, _)| e)?,
-        screen: screen_id, width, height
+        screen: screen_id, width: width as i32, height: height as i32
     })
 }
 
 pub fn test() -> Result<()> {
     let display = init()?;
     let win = active_window(&display)?;
+
+    // Calculate 75% of display size
+    let (w, h) =  ((display.width as f64 * 0.75) as i32, (display.height as f64 * 0.75) as i32);
+
+    // Center the window on the screen
+    let status_bar = 26;
+    let (x, y) =  ((display.width - w)/2, (display.height - h - status_bar)/2);
+
     let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
-    ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, 20, 0, 1700, 1100).request_check()?;
+    ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
     display.flush();
     Ok(())
 }
