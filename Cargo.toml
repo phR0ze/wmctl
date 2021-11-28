@@ -1,7 +1,7 @@
 [package]
 name = "wmctl"
 version = "0.0.1"
-edition = "2021"
+edition = "2018"
 authors = ["phR0ze"]
 license = "MIT OR Apache-2.0"
 description = "Rust X11 automation"

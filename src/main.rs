@@ -17,12 +17,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:<w$} {}", "Build Date:", APP_BUILD_DATE, w = 18);
     println!("{:<w$} {}", "Git Commit:", APP_GIT_COMMIT, w = 18);
 
-    let (_, display) = libwmctl::connect()?;
-    println!();
-    println!("Display information:");
-    println!("  width.........: {}", display.width);
-    println!("  height........: {}", display.height);
-    println!();
+    // let (_, display) = libwmctl::connect()?;
+    // println!();
+    // println!("Display information:");
+    // println!("  width.........: {}", display.width);
+    // println!("  height........: {}", display.height);
+    // println!();
 
     libwmctl::test()?;
 

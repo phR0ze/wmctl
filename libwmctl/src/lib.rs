@@ -1,10 +1,8 @@
-pub mod model;
+use std::ops::Deref;
 
-use std::str;
-use x11rb::connection::Connection;
-use x11rb::rust_connection::RustConnection;
-use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
-use tracing::{debug};
+//use tracing::{info};
+use xcb;
+use xcb_util::ewmh;
 
 /// `Result<T>` provides a simplified result type with a common error type
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -16,61 +14,75 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 /// use libwmctl::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::model;
+    pub use crate::*;
 }
 
-/// Open a connectdion to the X11 server
-pub fn connect() -> Result<(RustConnection, model::Display)> {
+struct Display {
+    conn: ewmh::Connection,
+    screen: i32,
+    width: u16,
+    height: u16,
+}
+impl Deref for Display {
+	type Target = xcb::Connection;
 
-    // TODO: handle more than one screen
-    debug!("Connecting to the X server");
-    let (conn, number) = x11rb::connect(None)?;
+	fn deref(&self) -> &Self::Target {
+		&self.conn
+	}
+}
 
-    // Extract display information
-    let screen = &conn.setup().roots[number];
-    conn.flush()?;
- 
-    let display = model::Display {
-        width: screen.width_in_pixels,
-        height: screen.height_in_pixels,
-        number: number,
+// Connect to the X11 server
+fn init() -> Result<Display> {
+    let (conn, screen_id) = xcb::Connection::connect(None)?;
+    let (width, height) = {
+        let screen = conn.get_setup().roots().nth(screen_id as usize).unwrap();
+        (screen.width_in_pixels(), screen.height_in_pixels())
     };
-
-    return Ok((conn, display))
+    Ok(Display{
+        conn: ewmh::Connection::connect(conn).map_err(|(e, _)| e)?,
+        screen: screen_id, width, height
+    })
 }
 
 pub fn test() -> Result<()> {
-
-    // Get the current screen
-    let (conn, number) = x11rb::connect(None)?;
-    let screen = &conn.setup().roots[number];
-
-    // Query for all existing windows
-    let tree = conn.query_tree(screen.root)?.reply()?;
-    for win in tree.children {
-        let name = get_win_name(&conn, win)?;
-        if name != "" {
-            println!("Win: {}", name);
-        }
-    }
-
-    conn.flush()?;
+    let display = init()?;
+    let win = active_window(&display)?;
+    println!("win: 0x{:x}", win); // win id same as wmctrl
+    let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
+    println!("flags: {}", flags); // 3840 same as wmctrl
+    let (conn, _) = xcb::Connection::connect(None)?;
+    xcb::configure_window(&conn, win, &[(xcb::CONFIG_WINDOW_WIDTH as u16, 1700), (xcb::CONFIG_WINDOW_HEIGHT as u16, 1100)]).request_check()?;
+    //ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, 0, 0, 1600, 1100);
+    conn.flush();
+    //ewmh::send_client_message(&display.conn, win, win, display.conn.MOVERESIZE_WINDOW(), &[flags, 20, 20, 1800, 1100]);
     Ok(())
 }
 
-// _NET_ACTIVE_WINDOW
-// https://docs.rs/cnx/0.3.0/cnx/widgets/struct.ActiveWindowTitle.html
-// https://github.com/meh/rust-xcb-util/blob/master/src/ewmh.rs
-// https://crates.io/crates/cnx
-// https://crates.io/crates/xcb-util
-
-// Get the given window's name
-pub fn get_win_name(conn: &RustConnection, win: u32) -> Result<String> {
-    let atom = conn.intern_atom(true, b"_NET_WM_NAME")?.reply()?.atom;
-    let res = conn.get_property(false, win, atom, AtomEnum::STRING, 0, std::u32::MAX)?.reply()?;
-    //let res = conn.get_property(false, win, AtomEnum::WM_NAME, AtomEnum::STRING, 0, std::u32::MAX)?.reply()?;
-    Ok(str::from_utf8(&res.value)?.to_string())
+// Get window title
+fn win_title(display: &Display, win: xcb::Window) -> Result<String> {
+    let name = ewmh::get_wm_name(&display.conn, win).get_reply()?;
+    Ok(name.string().to_string())
 }
+
+/// Get the active window id
+fn active_window(display: &Display) -> Result<u32> {
+    let active_win = ewmh::get_active_window(&display.conn, display.screen).get_reply()?;
+    Ok(active_win)
+}
+
+/// List out all the current window ids and their titles
+pub fn list_windows() -> Result<()> {
+    let display = init()?;
+    for win_id in ewmh::get_client_list(&display.conn, display.screen).get_reply()?.windows() {
+
+        //  Some window values don't appear to be valid and need to be skipped
+        if let Ok(name) = win_title(&display, *win_id) {
+            println!("ID: {}, Name: {}", *win_id, name);
+        }
+    }
+    Ok(())
+}
+
 
 #[cfg(test)]
 mod tests {
