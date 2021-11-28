@@ -31,28 +31,16 @@ impl Deref for Display {
 	}
 }
 
-// Connect to the X11 server
-fn init() -> Result<Display> {
-    let (conn, screen_id) = xcb::Connection::connect(None)?;
-    let (width, height) = {
-        let screen = conn.get_setup().roots().nth(screen_id as usize).unwrap();
-        (screen.width_in_pixels(), screen.height_in_pixels())
-    };
-    Ok(Display{
-        conn: ewmh::Connection::connect(conn).map_err(|(e, _)| e)?,
-        screen: screen_id, width: width as i32, height: height as i32
-    })
-}
-
-pub fn test() -> Result<()> {
+/// Resize the active window based on the ratio of the overall screen size then center it
+pub fn resize_and_center(x_ratio: f64, y_ratio: f64) -> Result<()> {
     let display = init()?;
     let win = active_window(&display)?;
 
     // Remove maximizing states
     ewmh::request_change_wm_state(&display.conn, display.screen, win, ewmh::STATE_REMOVE, display.conn.WM_ACTION_MAXIMIZE_HORZ(), display.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
 
-    // Calculate 75% of display size
-    let (w, h) =  ((display.width as f64 * 0.90) as i32, (display.height as f64 * 0.90) as i32);
+    // Calculate window size
+    let (w, h) =  ((display.width as f64 * x_ratio) as i32, (display.height as f64 * y_ratio) as i32);
 
     // Center the window on the screen
     let status_bar = 26;
@@ -63,18 +51,6 @@ pub fn test() -> Result<()> {
     ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
     display.flush();
     Ok(())
-}
-
-// Get window title
-fn win_title(display: &Display, win: xcb::Window) -> Result<String> {
-    let name = ewmh::get_wm_name(&display.conn, win).get_reply()?;
-    Ok(name.string().to_string())
-}
-
-/// Get the active window id
-fn active_window(display: &Display) -> Result<u32> {
-    let active_win = ewmh::get_active_window(&display.conn, display.screen).get_reply()?;
-    Ok(active_win)
 }
 
 /// List out all the current window ids and their titles
@@ -88,6 +64,31 @@ pub fn list_windows() -> Result<()> {
         }
     }
     Ok(())
+}
+
+// Connect to the X11 server
+fn init() -> Result<Display> {
+    let (conn, screen_id) = xcb::Connection::connect(None)?;
+    let (width, height) = {
+        let screen = conn.get_setup().roots().nth(screen_id as usize).unwrap();
+        (screen.width_in_pixels(), screen.height_in_pixels())
+    };
+    Ok(Display{
+        conn: ewmh::Connection::connect(conn).map_err(|(e, _)| e)?,
+        screen: screen_id, width: width as i32, height: height as i32
+    })
+}
+
+// Get window title
+fn win_title(display: &Display, win: xcb::Window) -> Result<String> {
+    let name = ewmh::get_wm_name(&display.conn, win).get_reply()?;
+    Ok(name.string().to_string())
+}
+
+/// Get the active window id
+fn active_window(display: &Display) -> Result<u32> {
+    let active_win = ewmh::get_active_window(&display.conn, display.screen).get_reply()?;
+    Ok(active_win)
 }
 
 
