@@ -59,6 +59,18 @@ winctl resize 70 80
             .arg(Arg::with_name("W_RATIO").index(1).required(true).help("w ratio of total display size to use (1 - 100)"))
             .arg(Arg::with_name("H_RATIO").index(2).required(true).help("h ratio of total display size to use (1 - 100)")),
         )
+
+        // Shape
+        .subcommand(SubCommand::with_name("shape").about("Shape and center the active window")
+            .long_about(r"Shape and center the active window
+
+Examples:
+
+# Shape and center the active window as a square
+winctl shape square
+")
+            .arg(Arg::with_name("SHAPE").index(1).required(true).help("shape to to use for the active window"))
+        )
         .get_matches_from_safe(env::args_os()).pass()?;
 
     // Execute
@@ -82,7 +94,12 @@ winctl resize 70 80
     } else if let Some(ref matches) = matches.subcommand_matches("resize") {
         let x_ratio = matches.value_of("W_RATIO").unwrap().parse::<u32>().wrap("Failed to convert W_RATIO into a valid 1-100 int")?;
         let y_ratio = matches.value_of("H_RATIO").unwrap().parse::<u32>().wrap("Failed to convert Y_RATIO into a valid 1-100 int")?;
-        libwmctl::resize_and_center(x_ratio as f64, y_ratio as f64).pass()?;
+        libwmctl::resize_and_center(x_ratio, y_ratio).pass()?;
+
+    // Shape
+    } else if let Some(ref matches) = matches.subcommand_matches("shape") {
+        let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
+        libwmctl::shape_win(shape).pass()?;
     }
     Ok(())
 }

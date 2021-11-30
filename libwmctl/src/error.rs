@@ -1,28 +1,19 @@
+use crate::PositionError;
+use crate::ShapeError;
 use std::fmt;
 use std::error::Error as StdError;
 
 /// `WmCtlResult<T>` provides a simplified result type with a common error type
 pub type WmCtlResult<T> = std::result::Result<T, WmCtlError>;
 
-// Position Error
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum PositionError {
-    Invalid(String),
-}
-impl StdError for PositionError {}
-impl fmt::Display for PositionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PositionError::Invalid(ref err) => write!(f, "invalid position was given: {}", err),
-        }
-    }
-}
-
 // An error indicating that something went wrong with a window operation
 #[derive(Debug)]
 pub enum WmCtlError {
     // An invalid position was given
     Position(PositionError),
+
+    // An invalid shape was given
+    Shape(ShapeError),
 
     // XCB connect error
     Conn(xcb::base::ConnError),
@@ -61,6 +52,7 @@ impl fmt::Display for WmCtlError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             WmCtlError::Position(ref err) => write!(f, "{}", err),
+            WmCtlError::Shape(ref err) => write!(f, "{}", err),
             WmCtlError::Conn(ref err) => write!(f, "{}", err),
             WmCtlError::Reply(ref err) => write!(f, "{}", err),
             WmCtlError::Utf8(ref err) => write!(f, "{}", err),
@@ -72,6 +64,7 @@ impl AsRef<dyn StdError> for WmCtlError {
     fn as_ref(&self) -> &(dyn StdError + 'static) {
         match *self {
             WmCtlError::Position(ref err) => err,
+            WmCtlError::Shape(ref err) => err,
             WmCtlError::Conn(ref err) => err,
             WmCtlError::Reply(ref err) => err,
             WmCtlError::Utf8(ref err) => err,
@@ -83,16 +76,11 @@ impl AsMut<dyn StdError> for WmCtlError {
     fn as_mut(&mut self) -> &mut (dyn StdError + 'static) {
         match *self {
             WmCtlError::Position(ref mut err) => err,
+            WmCtlError::Shape(ref mut err) => err,
             WmCtlError::Conn(ref mut err) => err,
             WmCtlError::Reply(ref mut err) => err,
             WmCtlError::Utf8(ref mut err) => err,
         }
-    }
-}
-
-impl From<PositionError> for WmCtlError {
-    fn from(err: PositionError) -> WmCtlError {
-        WmCtlError::Position(err)
     }
 }
 
@@ -116,25 +104,8 @@ impl From<std::str::Utf8Error> for WmCtlError {
 
 #[cfg(test)]
 mod tests {
-    //use crate::prelude::*;
 
     #[test]
     fn test_errors() {
-
-        // // Fungus(FuError),
-        // let mut err = CluError::from(FuError::from(FileError::FailedToExtractString));
-        // assert_eq!("failed to extract string from file", err.to_string());
-        // assert_eq!(
-        //     "failed to extract string from file",
-        //     err.as_ref().to_string()
-        // );
-        // assert_eq!(
-        //     "failed to extract string from file",
-        //     err.as_mut().to_string()
-        // );
-        // assert!(err.is::<FileError>());
-        // assert!(err.downcast_ref::<FileError>().is_some());
-        // assert!(err.downcast_mut::<FileError>().is_some());
-        // assert!(err.source().is_none());
     }
 }
