@@ -1,11 +1,11 @@
-use std::ops::Deref;
+mod error;
+mod position;
+use error::*;
+use std::{str, ops::Deref};
 
 //use tracing::{info};
-use xcb;
+use xcb::{self, xproto};
 use xcb_util::ewmh;
-
-/// `Result<T>` provides a simplified result type with a common error type
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// All essential symbols in a simple consumable form
 ///
@@ -15,6 +15,7 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 /// ```
 pub mod prelude {
     pub use crate::*;
+    pub use position::*;
 }
 
 struct Display {
@@ -31,8 +32,31 @@ impl Deref for Display {
 	}
 }
 
+/// Move the active window without changing its size
+pub fn move_win() -> WmCtlResult<()> {
+    let display = init()?;
+    let active = active_window(&display)?;
+
+    // Remove maximizing states
+    //ewmh::request_change_wm_state(&display.conn, display.screen, active, ewmh::STATE_REMOVE, display.conn.WM_ACTION_MAXIMIZE_HORZ(), display.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
+
+    win_class(&display, active)?;
+
+    // let (w, h) =  ((display.width as f64 * x_ratio) as i32, (display.height as f64 * y_ratio) as i32);
+
+    // // Center the window on the screen
+    // let status_bar = 26;
+    // let (x, y) =  ((display.width - w)/2, (display.height - h - status_bar)/2);
+
+    // // Resize and position
+    // let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
+    // ewmh::request_move_resize_window(&display.conn, display.screen, active, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
+    // display.flush();
+    Ok(())
+}
+
 /// Resize the active window based on the ratio of the overall screen size then center it
-pub fn resize_and_center(x_ratio: f64, y_ratio: f64) -> Result<()> {
+pub fn resize_and_center(x_ratio: f64, y_ratio: f64) -> WmCtlResult<()> {
     let display = init()?;
     let win = active_window(&display)?;
 
@@ -54,7 +78,7 @@ pub fn resize_and_center(x_ratio: f64, y_ratio: f64) -> Result<()> {
 }
 
 /// List out all the current window ids and their titles
-pub fn list_windows() -> Result<()> {
+pub fn list_windows() -> WmCtlResult<()> {
     let display = init()?;
     for win_id in ewmh::get_client_list(&display.conn, display.screen).get_reply()?.windows() {
 
@@ -67,7 +91,7 @@ pub fn list_windows() -> Result<()> {
 }
 
 // Connect to the X11 server
-fn init() -> Result<Display> {
+fn init() -> WmCtlResult<Display> {
     let (conn, screen_id) = xcb::Connection::connect(None)?;
     let (width, height) = {
         let screen = conn.get_setup().roots().nth(screen_id as usize).unwrap();
@@ -79,14 +103,21 @@ fn init() -> Result<Display> {
     })
 }
 
+// Get window class
+fn win_class(display: &Display, win: xcb::Window) -> WmCtlResult<String> {
+    let class = xcb::get_property(display, false, win, xproto::ATOM_WM_CLASS, xproto::ATOM_STRING, 0, 0).get_reply()?;
+    //println!("class: {}", class.value());
+    Ok(str::from_utf8(class.value())?.to_string())
+}
+
 // Get window title
-fn win_title(display: &Display, win: xcb::Window) -> Result<String> {
+fn win_title(display: &Display, win: xcb::Window) -> WmCtlResult<String> {
     let name = ewmh::get_wm_name(&display.conn, win).get_reply()?;
     Ok(name.string().to_string())
 }
 
 /// Get the active window id
-fn active_window(display: &Display) -> Result<u32> {
+fn active_window(display: &Display) -> WmCtlResult<u32> {
     let active_win = ewmh::get_active_window(&display.conn, display.screen).get_reply()?;
     Ok(active_win)
 }
