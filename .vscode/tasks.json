@@ -22,7 +22,7 @@
         {
             "label": "Run",
             "type": "shell",
-            "command": "cargo run"
+            "command": "cargo run -- move right"
         }
     ]
 }

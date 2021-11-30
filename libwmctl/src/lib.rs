@@ -5,7 +5,7 @@ use position::*;
 use std::{str, ops::Deref};
 
 //use tracing::{info};
-use xcb::{self, xproto};
+use xcb;
 use xcb_util::ewmh;
 
 /// All essential symbols in a simple consumable form
@@ -20,10 +20,12 @@ pub mod prelude {
 }
 
 struct Display {
-    conn: ewmh::Connection,
-    screen: i32,
-    width: i32,
-    height: i32,
+    conn: ewmh::Connection,     // window manager connection
+    screen: i32,                // screen number
+    full_width: i32,            // screen width
+    full_height: i32,           // screen height
+    work_width: i32,            // screen width minus possible taskbar
+    work_height: i32,           // screen height minus possible taskbar
 }
 impl Deref for Display {
 	type Target = xcb::Connection;
@@ -36,25 +38,26 @@ impl Deref for Display {
 /// Move the active window without changing its size
 pub fn move_win(position: Position) -> WmCtlResult<()> {
     let display = init()?;
-    let active = active_window(&display)?;
-    println!("position: {}", position);
+    let win = active_window(&display)?;
+    remove_maximize(&display, win)?;
 
-    // Remove maximizing states
-    //ewmh::request_change_wm_state(&display.conn, display.screen, active, ewmh::STATE_REMOVE, display.conn.WM_ACTION_MAXIMIZE_HORZ(), display.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
+    // Value returned for y is 28 off??
+    let (x, y, w, h) = win_geometry(&display, win)?;
+    println!("x: {}, y: {}, w: {}, h: {}", x, y, w, h);
 
-    let class = win_class(&display, active)?;
-    println!("class: {}", class);
+    // right
+    let x = display.work_width - w;
+    let y = 0; // seems to be 28 off by default?
+    //let y = display.work_height - h;
+    println!("x: {}, y: {}, w: {}, h: {}", x, y, w, h);
 
-    // let (w, h) =  ((display.width as f64 * x_ratio) as i32, (display.height as f64 * y_ratio) as i32);
+    println!("w: {}, h: {}", display.full_width, display.full_height);
+    println!("w: {}, h: {}", display.work_width, display.work_height);
 
-    // // Center the window on the screen
-    // let status_bar = 26;
-    // let (x, y) =  ((display.width - w)/2, (display.height - h - status_bar)/2);
-
-    // // Resize and position
-    // let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
-    // ewmh::request_move_resize_window(&display.conn, display.screen, active, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
-    // display.flush();
+    // Resize and position
+    let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
+    ewmh::request_move_resize_window(&display.conn, display.screen, win, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
+    display.flush();
     Ok(())
 }
 
@@ -64,14 +67,13 @@ pub fn resize_and_center(x_ratio: f64, y_ratio: f64) -> WmCtlResult<()> {
     let win = active_window(&display)?;
 
     // Remove maximizing states
-    ewmh::request_change_wm_state(&display.conn, display.screen, win, ewmh::STATE_REMOVE, display.conn.WM_ACTION_MAXIMIZE_HORZ(), display.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
+    remove_maximize(&display, win)?;
 
     // Calculate window size
-    let (w, h) =  ((display.width as f64 * x_ratio) as i32, (display.height as f64 * y_ratio) as i32);
+    let (w, h) =  ((display.work_width as f64 * x_ratio) as i32, (display.work_height as f64 * y_ratio) as i32);
 
     // Center the window on the screen
-    let status_bar = 26;
-    let (x, y) =  ((display.width - w)/2, (display.height - h - status_bar)/2);
+    let (x, y) =  ((display.work_width - w)/2, (display.work_height - h)/2);
 
     // Resize and position
     let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
@@ -95,22 +97,55 @@ pub fn list_windows() -> WmCtlResult<()> {
 
 // Connect to the X11 server
 fn init() -> WmCtlResult<Display> {
-    let (conn, screen_id) = xcb::Connection::connect(None)?;
+    let (conn, screen) = xcb::Connection::connect(None)?;
+
+    // Get the full screen size
     let (width, height) = {
-        let screen = conn.get_setup().roots().nth(screen_id as usize).unwrap();
+        let screen = conn.get_setup().roots().nth(screen as usize).unwrap();
         (screen.width_in_pixels(), screen.height_in_pixels())
     };
+
+    // Get the adjusted workspace size i.e. screen full size minus taskbar
+    let conn = ewmh::Connection::connect(conn).map_err(|(e, _)| e)?;
+    let (work_width, work_height) = {
+        let reply = ewmh::get_work_area(&conn, screen).get_reply()?;
+        let area = reply.work_area().first().unwrap();
+        (area.width(), area.height())
+    };
     Ok(Display{
-        conn: ewmh::Connection::connect(conn).map_err(|(e, _)| e)?,
-        screen: screen_id, width: width as i32, height: height as i32
+        conn: conn,
+        screen: screen,
+        full_width: width as i32,
+        full_height: height as i32, 
+        work_width: work_width as i32,
+        work_height: work_height as i32,
     })
 }
 
-// Get window class
-fn win_class(display: &Display, win: xcb::Window) -> WmCtlResult<String> {
-    let class = xcb::get_property(display, false, win, xproto::ATOM_WM_CLASS, xproto::ATOM_STRING, 0, 0).get_reply()?;
-    //println!("class: {}", class.value());
-    Ok(str::from_utf8(class.value())?.to_string())
+// Remove maximizing attributes
+fn remove_maximize(display: &Display, win: xcb::Window) -> WmCtlResult<()> {
+    ewmh::request_change_wm_state(&display.conn, display.screen, win, ewmh::STATE_REMOVE,
+        display.conn.WM_ACTION_MAXIMIZE_HORZ(), display.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
+    Ok(())
+}
+
+
+// Get desktop work area
+fn work_area(display: &Display, win: xcb::Window) -> WmCtlResult<(i16, i16, u16, u16)> {
+    let geo = xcb::get_geometry(&display, win).get_reply()?;
+    Ok((geo.x(), geo.y(), geo.width(), geo.height()))
+}
+
+// Get window geometry
+fn win_geometry(display: &Display, win: xcb::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+    let geo = xcb::get_geometry(&display, win).get_reply()?;
+    Ok((geo.x() as i32, geo.y() as i32, geo.width() as i32, geo.height() as i32))
+}
+
+// Get window pid
+fn win_pid(display: &Display, win: xcb::Window) -> WmCtlResult<u32> {
+    let pid = ewmh::get_wm_pid(&display.conn, win).get_reply()?;
+    Ok(pid)
 }
 
 // Get window title
