@@ -76,7 +76,7 @@ winctl resize 70 80
     // Move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
         let position = Position::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        println!("position: {}", position);
+        libwmctl::move_win(position).pass()?;
 
     // Resize
     } else if let Some(ref matches) = matches.subcommand_matches("resize") {

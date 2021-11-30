@@ -1,6 +1,7 @@
 mod error;
 mod position;
 use error::*;
+use position::*;
 use std::{str, ops::Deref};
 
 //use tracing::{info};
@@ -33,14 +34,16 @@ impl Deref for Display {
 }
 
 /// Move the active window without changing its size
-pub fn move_win() -> WmCtlResult<()> {
+pub fn move_win(position: Position) -> WmCtlResult<()> {
     let display = init()?;
     let active = active_window(&display)?;
+    println!("position: {}", position);
 
     // Remove maximizing states
     //ewmh::request_change_wm_state(&display.conn, display.screen, active, ewmh::STATE_REMOVE, display.conn.WM_ACTION_MAXIMIZE_HORZ(), display.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
 
-    win_class(&display, active)?;
+    let class = win_class(&display, active)?;
+    println!("class: {}", class);
 
     // let (w, h) =  ((display.width as f64 * x_ratio) as i32, (display.height as f64 * y_ratio) as i32);
 
