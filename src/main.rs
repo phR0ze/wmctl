@@ -30,6 +30,16 @@ fn init() -> Result<()> {
         // Version command
         .subcommand(SubCommand::with_name("version").alias("v").alias("ver").about("Print version information"))
 
+        // Resolution
+        .subcommand(SubCommand::with_name("resolution").about("List out display resolution")
+            .long_about(r"List out display resolution
+
+Examples:
+
+# List out display resolution
+winctl res
+"))
+ 
         // List out all the windows
         .subcommand(SubCommand::with_name("list").about("List out all windows")
             .long_about(r"List out all windows
@@ -38,8 +48,7 @@ Examples:
 
 # List out all windows
 winctl list
-")
-        )
+"))
 
         // Move window to given position
         .subcommand(SubCommand::with_name("move").about("Move the active window")
@@ -113,11 +122,17 @@ winctl shape square
         let y_ratio = matches.value_of("H_RATIO").unwrap().parse::<u32>().wrap("Failed to convert Y_RATIO into a valid 1-100 int")?;
         libwmctl::resize_and_center(x_ratio, y_ratio).pass()?;
 
+    // resolution
+    } else if let Some(_) = matches.subcommand_matches("resolution") {
+        let (w, h) = libwmctl::resolution().pass()?;
+        println!("{}x{}", w, h);
+
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
         let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
         libwmctl::shape_win(shape).pass()?;
     }
+
     Ok(())
 }
 

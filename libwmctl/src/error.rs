@@ -1,5 +1,6 @@
 use crate::PositionError;
 use crate::ShapeError;
+use crate::WinError;
 use std::fmt;
 use std::error::Error as StdError;
 
@@ -9,10 +10,10 @@ pub type WmCtlResult<T> = std::result::Result<T, WmCtlError>;
 // An error indicating that something went wrong with a window operation
 #[derive(Debug)]
 pub enum WmCtlError {
-    // An invalid position was given
+    // A position error
     Position(PositionError),
 
-    // An invalid shape was given
+    // A shape error
     Shape(ShapeError),
 
     // XCB connect error
@@ -23,6 +24,9 @@ pub enum WmCtlError {
 
     // std::str::Utf8Error
     Utf8(std::str::Utf8Error),
+
+    // A window error
+    Win(WinError),
 }
 impl WmCtlError {
     /// Implemented directly on the `Error` type to reduce casting required
@@ -56,6 +60,7 @@ impl fmt::Display for WmCtlError {
             WmCtlError::Conn(ref err) => write!(f, "{}", err),
             WmCtlError::Reply(ref err) => write!(f, "{}", err),
             WmCtlError::Utf8(ref err) => write!(f, "{}", err),
+            WmCtlError::Win(ref err) => write!(f, "{}", err),
         }
     }
 }
@@ -68,6 +73,7 @@ impl AsRef<dyn StdError> for WmCtlError {
             WmCtlError::Conn(ref err) => err,
             WmCtlError::Reply(ref err) => err,
             WmCtlError::Utf8(ref err) => err,
+            WmCtlError::Win(ref err) => err,
         }
     }
 }
@@ -80,6 +86,7 @@ impl AsMut<dyn StdError> for WmCtlError {
             WmCtlError::Conn(ref mut err) => err,
             WmCtlError::Reply(ref mut err) => err,
             WmCtlError::Utf8(ref mut err) => err,
+            WmCtlError::Win(ref mut err) => err,
         }
     }
 }

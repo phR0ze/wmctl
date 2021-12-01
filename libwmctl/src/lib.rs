@@ -2,10 +2,12 @@ mod wmctl;
 mod error;
 mod position;
 mod shape;
+mod win;
 use wmctl::*;
 use error::*;
 use shape::*;
 use position::*;
+use win::*;
 
 /// All essential symbols in a simple consumable form
 ///
@@ -22,25 +24,11 @@ pub mod prelude {
 
 /// Move the active window without changing its size
 pub fn move_win(position: Position) -> WmCtlResult<()> {
-    let wmctl = WmCtl::open()?;
-    let win = wmctl.active_win()?;
-    wmctl.remove_maximize(win)?;
-
-    // Value returned for y is 28 off??
-    // let (x, y, w, h) = display.win_geometry(win)?;
-    // println!("x: {}, y: {}, w: {}, h: {}", x, y, w, h);
-
-    // // right
-    // let x = display.work_width - w;
-    // let y = 0; // seems to be 28 off by default?
-    // //let y = display.work_height - h;
-    // println!("x: {}, y: {}, w: {}, h: {}", x, y, w, h);
-
-    // println!("w: {}, h: {}", display.full_width, display.full_height);
-    // println!("w: {}, h: {}", display.work_width, display.work_height);
-
+    let wmctl = WmCtl::connect()?;
+    println!("taskbar: {}x{}", wmctl.taskbar.w, wmctl.taskbar.h);
+    //let win = wmctl.active_win()?;
+    //wmctl.remove_maximize(win)?;
     //wmctl.move_win(win, position)?;
-    wmctl.taskbar()?;
     Ok(())
 }
 
@@ -48,7 +36,7 @@ pub fn move_win(position: Position) -> WmCtlResult<()> {
 pub fn resize_and_center(x_ratio: u32, y_ratio: u32) -> WmCtlResult<()> {
     let x_ratio = x_ratio as f64 * 0.01;
     let y_ratio = y_ratio as f64 * 0.01;
-    let wmctl = WmCtl::open()?;
+    let wmctl = WmCtl::connect()?;
     let win = wmctl.active_win()?;
 
     // Remove maximizing states
@@ -66,7 +54,7 @@ pub fn resize_and_center(x_ratio: u32, y_ratio: u32) -> WmCtlResult<()> {
 
 /// Shape the active window without moving it
 pub fn shape_win(shape: Shape) -> WmCtlResult<()> {
-    let wmctl = WmCtl::open()?;
+    let wmctl = WmCtl::connect()?;
     let win = wmctl.active_win()?;
     wmctl.remove_maximize(win)?;
 
@@ -93,13 +81,19 @@ pub fn shape_win(shape: Shape) -> WmCtlResult<()> {
 
 /// List out all the current window ids and their titles
 pub fn list_windows() -> WmCtlResult<()> {
-    let wmctl = WmCtl::open()?;
+    let wmctl = WmCtl::connect()?;
     for (id, name) in wmctl.windows()? {
         let (_, _, w, h) = wmctl.win_geometry(id)?;
         let typ = wmctl.win_type(id)?;
         println!("ID: {}, Size: {}x{}, Type: {}, Name: {}", id, w, h, typ, name);
     }
     Ok(())
+}
+
+/// Get screen resolution
+pub fn resolution() -> WmCtlResult<(u32, u32)> {
+    let wmctl = WmCtl::connect()?;
+    Ok((wmctl.full_width as u32, wmctl.full_height as u32))
 }
 
 

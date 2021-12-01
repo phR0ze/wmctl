@@ -1,4 +1,4 @@
-use crate::{WmCtlResult, prelude::Position};
+use crate::{WmCtlResult, Position, Win, WinError};
 use std::ops::Deref;
 use xcb;
 use xcb_util::ewmh;
@@ -10,6 +10,7 @@ pub(crate) struct WmCtl {
     pub(crate) full_height: i32,        // screen height
     pub(crate) work_width: i32,         // screen width minus possible taskbar
     pub(crate) work_height: i32,        // screen height minus possible taskbar
+    pub(crate) taskbar: Win,            // taskbar geometry
 }
 
 impl Deref for WmCtl {
@@ -22,11 +23,11 @@ impl Deref for WmCtl {
 
 // Connect to the X11 server
 impl WmCtl {
-    pub(crate) fn open() -> WmCtlResult<WmCtl> {
+    pub(crate) fn connect() -> WmCtlResult<WmCtl> {
         let (conn, screen) = xcb::Connection::connect(None)?;
 
         // Get the full screen size
-        let (width, height) = {
+        let (full_width, full_height) = {
             let screen = conn.get_setup().roots().nth(screen as usize).unwrap();
             (screen.width_in_pixels(), screen.height_in_pixels())
         };
@@ -38,13 +39,33 @@ impl WmCtl {
             let area = reply.work_area().first().unwrap();
             (area.width(), area.height())
         };
+
+        // Get the taskbar window
+        let mut taskbar = Win {x: 0, y: 0, w: 0, h: 0};
+        for win in ewmh::get_client_list(&conn, screen).get_reply()?.windows() {
+            if let Ok(geo) = xcb::get_geometry(&conn, *win).get_reply() {
+                let (x, y, w, h) = (geo.x() as i32, geo.y() as i32, geo.width() as i32, geo.height() as i32);
+                if w == full_width as i32 && h == (full_height as i32 - work_height as i32) {
+                    taskbar = Win{x, y, w, h};
+                    break;
+                } else if h == full_height as i32 && w == (full_width as i32 - work_width as i32) {
+                    taskbar = Win{x, y, w, h};
+                    break;
+                }
+            }
+        }
+        if taskbar.w == 0 && taskbar.h == 0 {
+            return Err(WinError::TaskbarNotFound.into())
+        }
+
         Ok(WmCtl{
             conn,
             screen,
-            full_width: width as i32,
-            full_height: height as i32, 
+            full_width: full_width as i32,
+            full_height: full_height as i32, 
             work_width: work_width as i32,
             work_height: work_height as i32,
+            taskbar,
         })
     }
 
@@ -60,23 +81,41 @@ impl WmCtl {
 
     // Move window
     pub(crate) fn move_win(&self, win: xcb::Window, position: Position) -> WmCtlResult<()> {
-        let (w, h) = (0, 0); // not used since flags don't indicate resize
         let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y;
 
+        // Get the current window position. Since we're not including the ...WIDTH and ...HEIGHT flags
+        // we are ignoring the w, h values returned from win_geometry
+        let (x, y, w, h) = self.win_geometry(win)?;
+
+        println!("full w: {}, h: {}", self.full_width, self.full_height);
+        println!("work w: {}, h: {}", self.work_width, self.work_height);
+
+
         // Compute coordinates based on position
+        println!("1: x: {}, y: {}, w: {}, h: {}", x, y, w, h);
         let (x, y) = match position {
-            Position::Center => (0, 0),
+            Position::Center => {
+                let (mut x, mut y) = ((self.work_width - w)/2, (self.work_height - h)/2);
+                if x < 0 {
+                    x = 0;
+                }
+                if y < 0 {
+                    y = 0;
+                }
+                (x, y)
+            },
             Position::Left => (0, 0),
-            Position::Right => (0, 0),
+            Position::Right => (self.work_width - w, self.work_height - h),
             Position::Top => (0, 0),
             Position::Bottom => (0, 0),
             Position::TopLeft => (0, 0),
-            Position::TopRight => (0, 0),
+            Position::TopRight => (self.work_width - w, 0),
             Position::BottomLeft => (0, 0),
             Position::BottomRight => (0, 0),
         };
+        println!("2: x: {}, y: {}, w: {}, h: {}", x, y, w, h);
 
-        ewmh::request_move_resize_window(&self.conn, self.screen, win, 0, 0, flags, x as u32, y as u32, w, h).request_check()?;
+        ewmh::request_move_resize_window(&self.conn, self.screen, win, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
         self.flush();
         Ok(())
     }
@@ -124,25 +163,19 @@ impl WmCtl {
         Ok(*reply.atoms().first().unwrap())
     }
 
-
     /// Get the active window id
-    pub(crate) fn active_win(&self) -> WmCtlResult<u32> {
+    pub(crate) fn active_win(&self) -> WmCtlResult<xcb::Window> {
         Ok(ewmh::get_active_window(&self.conn, self.screen).get_reply()?)
-    }
-
-    /// Identify the taskbar based on sizing to take into account
-    pub(crate) fn taskbar(&self) -> WmCtlResult<(u32, u32)> {
-        Ok((0, 0))
     }
 
     /// Get all the windows
     pub(crate) fn windows(&self) -> WmCtlResult<Vec<(u32, String)>> {
         let mut windows = vec![];
-        for win_id in ewmh::get_client_list(&self.conn, self.screen).get_reply()?.windows() {
+        for win in ewmh::get_client_list(&self.conn, self.screen).get_reply()?.windows() {
 
             //  Some window values don't appear to have valid titles and need to be skipped
-            if let Ok(name) = self.win_title(*win_id) {
-                windows.push((*win_id, name));
+            if let Ok(name) = self.win_title(*win) {
+                windows.push((*win, name));
             }
         }
         Ok(windows)

@@ -34,10 +34,10 @@ impl TryFrom<&str> for Position {
             "right" => Ok(Position::Right),
             "top" => Ok(Position::Top),
             "bottom" => Ok(Position::Bottom),
-            "topleft" => Ok(Position::TopLeft),
-            "topright" => Ok(Position::TopRight),
-            "bottomleft" => Ok(Position::BottomLeft),
-            "bottomright" => Ok(Position::BottomRight),
+            "top-left" => Ok(Position::TopLeft),
+            "top-right" => Ok(Position::TopRight),
+            "bottom-left" => Ok(Position::BottomLeft),
+            "bottom-right" => Ok(Position::BottomRight),
             _ => Err(PositionError::Invalid(val.to_string()).into()),
         }
     }
