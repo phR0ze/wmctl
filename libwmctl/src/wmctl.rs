@@ -3,7 +3,7 @@ use std::ops::Deref;
 use xcb;
 use xcb_util::ewmh;
 
-pub(crate) struct Display {
+pub(crate) struct WmCtl {
     pub(crate) conn: ewmh::Connection,  // window manager connection
     pub(crate) screen: i32,             // screen number
     pub(crate) full_width: i32,         // screen width
@@ -12,7 +12,7 @@ pub(crate) struct Display {
     pub(crate) work_height: i32,        // screen height minus possible taskbar
 }
 
-impl Deref for Display {
+impl Deref for WmCtl {
 	type Target = xcb::Connection;
 
 	fn deref(&self) -> &Self::Target {
@@ -21,8 +21,8 @@ impl Deref for Display {
 }
 
 // Connect to the X11 server
-impl Display {
-    pub(crate) fn open() -> WmCtlResult<Display> {
+impl WmCtl {
+    pub(crate) fn open() -> WmCtlResult<WmCtl> {
         let (conn, screen) = xcb::Connection::connect(None)?;
 
         // Get the full screen size
@@ -38,7 +38,7 @@ impl Display {
             let area = reply.work_area().first().unwrap();
             (area.width(), area.height())
         };
-        Ok(Display{
+        Ok(WmCtl{
             conn,
             screen,
             full_width: width as i32,
