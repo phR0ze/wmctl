@@ -1,4 +1,4 @@
-use crate::WmCtlResult;
+use crate::{WmCtlResult, prelude::Position};
 use std::ops::Deref;
 use xcb;
 use xcb_util::ewmh;
@@ -39,8 +39,8 @@ impl Display {
             (area.width(), area.height())
         };
         Ok(Display{
-            conn: conn,
-            screen: screen,
+            conn,
+            screen,
             full_width: width as i32,
             full_height: height as i32, 
             work_width: work_width as i32,
@@ -50,8 +50,33 @@ impl Display {
 
     // Move and resize window
     pub(crate) fn move_and_resize(&self, win: xcb::Window, x: i32, y: i32, w: i32, h: i32) -> WmCtlResult<()> {
-        let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
+        //let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y | ewmh::MOVE_RESIZE_WINDOW_WIDTH | ewmh::MOVE_RESIZE_WINDOW_HEIGHT;
+        let (x, y, w, h) = (500, 00, 1000, 1000);
+        let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y;
         ewmh::request_move_resize_window(&self.conn, self.screen, win, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
+        self.flush();
+        Ok(())
+    }
+
+    // Move window
+    pub(crate) fn move_win(&self, win: xcb::Window, position: Position) -> WmCtlResult<()> {
+        let (w, h) = (0, 0); // not used since flags don't indicate resize
+        let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y;
+
+        // Compute coordinates based on position
+        let (x, y) = match position {
+            Position::Center => (0, 0),
+            Position::Left => (0, 0),
+            Position::Right => (0, 0),
+            Position::Top => (0, 0),
+            Position::Bottom => (0, 0),
+            Position::TopLeft => (0, 0),
+            Position::TopRight => (0, 0),
+            Position::BottomLeft => (0, 0),
+            Position::BottomRight => (0, 0),
+        };
+
+        ewmh::request_move_resize_window(&self.conn, self.screen, win, 0, 0, flags, x as u32, y as u32, w, h).request_check()?;
         self.flush();
         Ok(())
     }
@@ -91,9 +116,15 @@ impl Display {
     }
 
     /// Get the active window id
-    pub(crate) fn active_window(&self) -> WmCtlResult<u32> {
+    pub(crate) fn active_win(&self) -> WmCtlResult<u32> {
         let active_win = ewmh::get_active_window(&self.conn, self.screen).get_reply()?;
         Ok(active_win)
+    }
+
+    /// Identify the taskbar based on sizing to take into account
+    pub(crate) fn taskbar(&self) -> WmCtlResult<(u32, u32)> {
+        //let taskbar = "xfce4-panel"
+        Ok((0, 0))
     }
 
     /// Get all the windows

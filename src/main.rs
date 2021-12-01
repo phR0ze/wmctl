@@ -30,6 +30,17 @@ fn init() -> Result<()> {
         // Version command
         .subcommand(SubCommand::with_name("version").alias("v").alias("ver").about("Print version information"))
 
+        // List out all the windows
+        .subcommand(SubCommand::with_name("list").about("List out all windows")
+            .long_about(r"List out all windows
+
+Examples:
+
+# List out all windows
+winctl list
+")
+        )
+
         // Move window to given position
         .subcommand(SubCommand::with_name("move").about("Move the active window")
             .long_about(r"Move the active window
@@ -69,7 +80,9 @@ Examples:
 # Shape and center the active window as a square
 winctl shape square
 ")
-            .arg(Arg::with_name("SHAPE").index(1).required(true).help("shape to to use for the active window"))
+            .arg(Arg::with_name("SHAPE").index(1).required(true)
+                .value_names(&["3x4", "square"])
+                .help("shape to to use for the active window"))
         )
         .get_matches_from_safe(env::args_os()).pass()?;
 
@@ -85,18 +98,22 @@ winctl shape square
         println!("{:<w$} {}", "Build Date:", APP_BUILD_DATE, w = 18);
         println!("{:<w$} {}", "Git Commit:", APP_GIT_COMMIT, w = 18);
 
-    // Move
+    // list
+    } else if let Some(_) = matches.subcommand_matches("list") {
+        libwmctl::list_windows().pass()?;
+
+    // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
         let position = Position::try_from(matches.value_of("POSITION").unwrap()).pass()?;
         libwmctl::move_win(position).pass()?;
 
-    // Resize
+    // resize
     } else if let Some(ref matches) = matches.subcommand_matches("resize") {
         let x_ratio = matches.value_of("W_RATIO").unwrap().parse::<u32>().wrap("Failed to convert W_RATIO into a valid 1-100 int")?;
         let y_ratio = matches.value_of("H_RATIO").unwrap().parse::<u32>().wrap("Failed to convert Y_RATIO into a valid 1-100 int")?;
         libwmctl::resize_and_center(x_ratio, y_ratio).pass()?;
 
-    // Shape
+    // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
         let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
         libwmctl::shape_win(shape).pass()?;
