@@ -25,10 +25,9 @@ pub mod prelude {
 /// Move the active window without changing its size
 pub fn move_win(position: Position) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
-    println!("taskbar: {}x{}", wmctl.taskbar.w, wmctl.taskbar.h);
-    //let win = wmctl.active_win()?;
-    //wmctl.remove_maximize(win)?;
-    //wmctl.move_win(win, position)?;
+    let win = wmctl.active_win()?;
+    wmctl.remove_maximize(win)?;
+    wmctl.move_win(win, position)?;
     Ok(())
 }
 
@@ -83,9 +82,9 @@ pub fn shape_win(shape: Shape) -> WmCtlResult<()> {
 pub fn list_windows() -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
     for (id, name) in wmctl.windows()? {
-        let (_, _, w, h) = wmctl.win_geometry(id)?;
+        let (x, y, w, h) = wmctl.win_geometry(id)?;
         let typ = wmctl.win_type(id)?;
-        println!("ID: {}, Size: {}x{}, Type: {}, Name: {}", id, w, h, typ, name);
+        println!("ID: {}, Size: {}x{}, Pos: {}x{}, Type: {}, Name: {}", id, w, h, x, y, typ, name);
     }
     Ok(())
 }

@@ -58,6 +58,7 @@ impl WmCtl {
             return Err(WinError::TaskbarNotFound.into())
         }
 
+        // Cache the results
         Ok(WmCtl{
             conn,
             screen,
@@ -93,6 +94,7 @@ impl WmCtl {
 
         // Compute coordinates based on position
         println!("1: x: {}, y: {}, w: {}, h: {}", x, y, w, h);
+        println!("t: x: {}, y: {}, w: {}, h: {}", self.taskbar.x, self.taskbar.y, self.taskbar.w, self.taskbar.h);
         let (x, y) = match position {
             Position::Center => {
                 let (mut x, mut y) = ((self.work_width - w)/2, (self.work_height - h)/2);
