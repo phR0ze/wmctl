@@ -22,9 +22,9 @@ pub mod prelude {
 
 /// Move the active window without changing its size
 pub fn move_win(position: Position) -> WmCtlResult<()> {
-    let wm = WmCtl::open()?;
-    let win = wm.active_win()?;
-    wm.remove_maximize(win)?;
+    let wmctl = WmCtl::open()?;
+    let win = wmctl.active_win()?;
+    wmctl.remove_maximize(win)?;
 
     // Value returned for y is 28 off??
     // let (x, y, w, h) = display.win_geometry(win)?;
@@ -39,7 +39,8 @@ pub fn move_win(position: Position) -> WmCtlResult<()> {
     // println!("w: {}, h: {}", display.full_width, display.full_height);
     // println!("w: {}, h: {}", display.work_width, display.work_height);
 
-    wm.move_win(win, position)?;
+    //wmctl.move_win(win, position)?;
+    wmctl.taskbar()?;
     Ok(())
 }
 
@@ -95,7 +96,8 @@ pub fn list_windows() -> WmCtlResult<()> {
     let wmctl = WmCtl::open()?;
     for (id, name) in wmctl.windows()? {
         let (_, _, w, h) = wmctl.win_geometry(id)?;
-        println!("ID: {}, Size: {}x{}, Name: {}", id, w, h, name);
+        let typ = wmctl.win_type(id)?;
+        println!("ID: {}, Size: {}x{}, Type: {}, Name: {}", id, w, h, typ, name);
     }
     Ok(())
 }

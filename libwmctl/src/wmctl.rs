@@ -115,15 +115,23 @@ impl WmCtl {
         Ok(name.string().to_string())
     }
 
+    // Get window type
+    // 390 = app
+    // 475 = desktop
+    // 476 = panel
+    pub(crate) fn win_type(&self, win: xcb::Window) -> WmCtlResult<u32> {
+        let reply = ewmh::get_wm_window_type(&self.conn, win).get_reply()?;
+        Ok(*reply.atoms().first().unwrap())
+    }
+
+
     /// Get the active window id
     pub(crate) fn active_win(&self) -> WmCtlResult<u32> {
-        let active_win = ewmh::get_active_window(&self.conn, self.screen).get_reply()?;
-        Ok(active_win)
+        Ok(ewmh::get_active_window(&self.conn, self.screen).get_reply()?)
     }
 
     /// Identify the taskbar based on sizing to take into account
     pub(crate) fn taskbar(&self) -> WmCtlResult<(u32, u32)> {
-        //let taskbar = "xfce4-panel"
         Ok((0, 0))
     }
 
