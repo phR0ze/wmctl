@@ -91,6 +91,14 @@ impl WmCtl {
         let (x, y) = (x - dx, y - dy);
         debug!("move_win: id: {}, pos: {}, x: {}, y: {}, w: {}, h: {}", win, position, x, y, w, h);
 
+        // Take taskbar into account
+        // let (x, y) = match self.taskbar {
+        //     Position::Left => (0, 0),
+        //     Position::Right => (0, 0),
+        //     Position::Top => (0, 0),
+        //     _ => (0, 0),
+        // };
+
         // Compute coordinates based on position
         let (x, y) = match position {
             Position::Center => {
@@ -104,13 +112,14 @@ impl WmCtl {
                 (x, y)
             },
             Position::Left => (0, 0),
+            Position::TopLeft => (0, 0), // done
+            Position::BottomLeft => (0, 0),
+            // Right
             Position::Right => (self.work_width - w, self.work_height - h),
+            Position::TopRight => (self.work_width - w, 0), // done
+            Position::BottomRight => (self.work_width - w, self.work_height - h),
             Position::Top => (0, 0),
             Position::Bottom => (0, 0),
-            Position::TopLeft => (0, 0),
-            Position::TopRight => (self.work_width - w, 0),
-            Position::BottomLeft => (0, 0),
-            Position::BottomRight => (0, 0),
         };
 
         // source: unspecified(0), app(1), pager(2)
