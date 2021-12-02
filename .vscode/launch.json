@@ -22,7 +22,7 @@
             "args": [
                 "-d",
                 "move",
-                "center"
+                "right"
             ],
             "cwd": "${workspaceFolder}"
         },

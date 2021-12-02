@@ -79,70 +79,72 @@ impl WmCtl {
 
     // Move window
     pub(crate) fn move_win(&self, win: xcb::Window, position: Position) -> WmCtlResult<()> {
+
+        // Only setting the movement flags not the resize flags so width and height won't
+        // be used in the final operation.
         let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y;
 
-        // In order to guarntee move will work we must remove maximization states
+        // In order to guarantee move will work we must remove maximization states
         self.remove_maximize(win)?;
 
-        // Get the current window position. Since we're not including the ...WIDTH and ...HEIGHT flags
-        // we are ignoring the w, h values returned from win_geometry
-        let (x, y, w, h) = self.win_geometry(win)?;
-        let (dx, dy) = self.decorations(win)?;
-        let (x, y) = (x - dx, y - dy);
-        debug!("move_win: id: {}, pos: {}, x: {}, y: {}, w: {}, h: {}", win, position, x, y, w, h);
+        // Get the current window position adjusted for decorations
+        let (x, y, w, h) = self.win_decorated(win)?;
 
-        // Take taskbar into account
-        // let (x, y) = match self.taskbar {
+        // // Compute coordinates based on position
+        // let (x, y) = match position {
+        //     Position::Center => {
+        //         let (mut x, mut y) = ((self.work_width - w)/2, (self.work_height - h)/2);
+        //         if x < 0 {
+        //             x = 0;
+        //         }
+        //         if y < 0 {
+        //             y = 0;
+        //         }
+        //         (x, y)
+        //     },
         //     Position::Left => (0, 0),
-        //     Position::Right => (0, 0),
+        //     Position::TopLeft => (0, 0), // done
+        //     Position::BottomLeft => (0, 0),
+
+        //     // Right: calculate x from right side
+        //     Position::Right => (self.work_width - w, y), // y isn't changed
+        //     Position::TopRight => (self.work_width - w, 0), // y is zero 
+        //     Position::BottomRight => (self.work_width - w, self.work_height - h), // y is calculated from bottom up
         //     Position::Top => (0, 0),
-        //     _ => (0, 0),
+        //     Position::Bottom => (0, 0),
         // };
+        // debug!("move_win: id: {}, pos: {}, x: {}, y: {}, w: {}, h: {}", win, position, x, y, w, h);
 
-        // Compute coordinates based on position
-        let (x, y) = match position {
-            Position::Center => {
-                let (mut x, mut y) = ((self.work_width - w)/2, (self.work_height - h)/2);
-                if x < 0 {
-                    x = 0;
-                }
-                if y < 0 {
-                    y = 0;
-                }
-                (x, y)
-            },
-            Position::Left => (0, 0),
-            Position::TopLeft => (0, 0), // done
-            Position::BottomLeft => (0, 0),
-            // Right
-            Position::Right => (self.work_width - w, self.work_height - h),
-            Position::TopRight => (self.work_width - w, 0), // done
-            Position::BottomRight => (self.work_width - w, self.work_height - h),
-            Position::Top => (0, 0),
-            Position::Bottom => (0, 0),
-        };
-
-        // source: unspecified(0), app(1), pager(2)
-        let (gravity, source) = (0, 2);
-        ewmh::request_move_resize_window(&self.conn, self.screen, win, gravity, source, flags, x as u32, y as u32, 0, 0).request_check()?;
-        self.flush();
+        // // source: unspecified(0), app(1), pager(2)
+        // let (gravity, source) = (0, 2);
+        // ewmh::request_move_resize_window(&self.conn, self.screen, win, gravity, source, flags, x as u32, y as u32, 0, 0).request_check()?;
+        // self.flush();
         Ok(())
     }
 
-    // Decorations offset for x and y i.e. the space consumed by window decorations
-    pub(crate) fn decorations(&self, win: xcb::Window) -> WmCtlResult<(i32, i32)> {
+    // Window gemometry accounting for decorations
+    pub(crate) fn win_decorated(&self, win: xcb::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
         let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y;
 
-        // Shift the window to 0, 0
-        let (gravity, source, x, y, w, h) = (0, 2, 0, 0, 0, 0);
-        ewmh::request_move_resize_window(&self.conn, self.screen, win, gravity, source, flags, x, y, w, h).request_check()?;
+        // 1. get the window's original geometry
+        let (x, y, w, h) = self.win_geometry(win)?;
+
+        // 2. shift the window to 0, 0
+        ewmh::request_move_resize_window(&self.conn, self.screen, win, 0, 0, flags, 0, 0, 0, 0).request_check()?;
         self.flush();
 
-        // Now check the x, y offset to determine decoration size
+        // 3. check the x, y offset to determine decoration size
         let g = xcb::get_geometry(&self, win).get_reply()?;
-        let (x, y) = (g.x(), g.y());
-        debug!("decorations: id: {}, x: {}, y: {}", win, x, y);
-        Ok((x as i32, y as i32))
+        let (dx, dy) = (g.x() as i32, g.y() as i32);
+        debug!("decorations: id: {}, x: {}, y: {}", win, dx, dy);
+
+        // 3. finally shift the window back to where it was accounting for decorations
+        let (x, y, w, h) = (x-dx, y-dy, w+dx, h+dy);
+        debug!("win_decorated: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
+        ewmh::request_move_resize_window(&self.conn, self.screen, win, 0, 0, flags, x as u32, y as u32, 0, 0).request_check()?;
+        self.flush();
+
+        Ok((x, y, w, h))
     }
 
     // Get window extents

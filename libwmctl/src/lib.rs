@@ -26,7 +26,6 @@ pub mod prelude {
 pub fn move_win(position: Position) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
     let win = wmctl.active_win()?;
-    wmctl.remove_maximize(win)?;
     wmctl.move_win(win, position)?;
     Ok(())
 }
