@@ -1,10 +1,11 @@
 mod logger;
-use std::env;
+use std::{env, str::FromStr};
 use gory::*;
 use witcher::prelude::*;
 use libwmctl::prelude::*;
 use std::convert::TryFrom;
 use clap::{App, AppSettings, Arg, SubCommand};
+use tracing::Level;
 
 pub const APP_NAME: &str = "wmctl";
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -97,7 +98,10 @@ winctl shape square
 
     // Execute
     // ---------------------------------------------------------------------------------------------
-    logger::init();
+    logger::init(match matches.is_present("debug") {
+        true => Some(Level::DEBUG),
+        _ => None,
+    });
 
     // Version
     if let Some(ref _matches) = matches.subcommand_matches("version") {

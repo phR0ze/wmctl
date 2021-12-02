@@ -1,5 +1,8 @@
+// Extended Window Manager Hints (EWMH)
+// https://specifications.freedesktop.org/wm-spec/latest/
 use crate::{WmCtlResult, Position, Win, WinError};
 use std::ops::Deref;
+use tracing::debug;
 use xcb;
 use xcb_util::ewmh;
 
@@ -10,7 +13,8 @@ pub(crate) struct WmCtl {
     pub(crate) full_height: i32,        // screen height
     pub(crate) work_width: i32,         // screen width minus possible taskbar
     pub(crate) work_height: i32,        // screen height minus possible taskbar
-    pub(crate) taskbar: Win,            // taskbar geometry
+    pub(crate) taskbar: Position,       // taskbar position
+    pub(crate) taskbar_size: i32,       // taskbar reserved space
 }
 
 impl Deref for WmCtl {
@@ -32,42 +36,35 @@ impl WmCtl {
             (screen.width_in_pixels(), screen.height_in_pixels())
         };
 
-        // Get the adjusted workspace size i.e. screen full size minus taskbar
-        let conn = ewmh::Connection::connect(conn).map_err(|(e, _)| e)?;
-        let (work_width, work_height) = {
-            let reply = ewmh::get_work_area(&conn, screen).get_reply()?;
-            let area = reply.work_area().first().unwrap();
-            (area.width(), area.height())
-        };
-
-        // Get the taskbar window
-        let mut taskbar = Win {x: 0, y: 0, w: 0, h: 0};
-        for win in ewmh::get_client_list(&conn, screen).get_reply()?.windows() {
-            if let Ok(geo) = xcb::get_geometry(&conn, *win).get_reply() {
-                let (x, y, w, h) = (geo.x() as i32, geo.y() as i32, geo.width() as i32, geo.height() as i32);
-                if w == full_width as i32 && h == (full_height as i32 - work_height as i32) {
-                    taskbar = Win{x, y, w, h};
-                    break;
-                } else if h == full_height as i32 && w == (full_width as i32 - work_width as i32) {
-                    taskbar = Win{x, y, w, h};
-                    break;
-                }
-            }
-        }
-        if taskbar.w == 0 && taskbar.h == 0 {
-            return Err(WinError::TaskbarNotFound.into())
-        }
-
-        // Cache the results
-        Ok(WmCtl{
-            conn,
+        let mut wmctl = WmCtl{
+            conn:  ewmh::Connection::connect(conn).map_err(|(e, _)| e)?,
             screen,
             full_width: full_width as i32,
             full_height: full_height as i32, 
-            work_width: work_width as i32,
-            work_height: work_height as i32,
-            taskbar,
-        })
+            work_width: Default::default(),
+            work_height: Default::default(),
+            taskbar: Position::Bottom, // just a default its reset lower down
+            taskbar_size: Default::default(),
+        };
+
+        // Get the adjusted workspace size i.e. screen full size minus taskbar
+        let (_, _, work_width, work_height) = wmctl.work_area()?;
+        wmctl.work_width = work_width;
+        wmctl.work_height = work_height;
+
+        // Cache the taskbar's position and size
+        let (pos, size) = wmctl.taskbar()?;
+        wmctl.taskbar = pos;
+        wmctl.taskbar_size = size;
+
+        Ok(wmctl)
+    }
+
+    /// Get the active window id
+    pub(crate) fn active_win(&self) -> WmCtlResult<xcb::Window> {
+        let win = ewmh::get_active_window(&self.conn, self.screen).get_reply()?;
+        debug!("active_win: id: {}", win);
+        Ok(win)
     }
 
     // Move and resize window
@@ -84,17 +81,17 @@ impl WmCtl {
     pub(crate) fn move_win(&self, win: xcb::Window, position: Position) -> WmCtlResult<()> {
         let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y;
 
+        // In order to guarntee move will work we must remove maximization states
+        self.remove_maximize(win)?;
+
         // Get the current window position. Since we're not including the ...WIDTH and ...HEIGHT flags
         // we are ignoring the w, h values returned from win_geometry
         let (x, y, w, h) = self.win_geometry(win)?;
-
-        println!("full w: {}, h: {}", self.full_width, self.full_height);
-        println!("work w: {}, h: {}", self.work_width, self.work_height);
-
+        let (dx, dy) = self.decorations(win)?;
+        let (x, y) = (x - dx, y - dy);
+        debug!("move_win: id: {}, pos: {}, x: {}, y: {}, w: {}, h: {}", win, position, x, y, w, h);
 
         // Compute coordinates based on position
-        println!("1: x: {}, y: {}, w: {}, h: {}", x, y, w, h);
-        println!("t: x: {}, y: {}, w: {}, h: {}", self.taskbar.x, self.taskbar.y, self.taskbar.w, self.taskbar.h);
         let (x, y) = match position {
             Position::Center => {
                 let (mut x, mut y) = ((self.work_width - w)/2, (self.work_height - h)/2);
@@ -115,45 +112,71 @@ impl WmCtl {
             Position::BottomLeft => (0, 0),
             Position::BottomRight => (0, 0),
         };
-        println!("2: x: {}, y: {}, w: {}, h: {}", x, y, w, h);
 
-        ewmh::request_move_resize_window(&self.conn, self.screen, win, 0, 0, flags, x as u32, y as u32, w as u32, h as u32).request_check()?;
+        // source: unspecified(0), app(1), pager(2)
+        let (gravity, source) = (0, 2);
+        ewmh::request_move_resize_window(&self.conn, self.screen, win, gravity, source, flags, x as u32, y as u32, 0, 0).request_check()?;
         self.flush();
         Ok(())
     }
 
-    // Remove maximizing attributes
-    pub(crate) fn remove_maximize(&self, win: xcb::Window) -> WmCtlResult<()> {
-        ewmh::request_change_wm_state(&self.conn, self.screen, win, ewmh::STATE_REMOVE,
-            self.conn.WM_ACTION_MAXIMIZE_HORZ(), self.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
-        Ok(())
+    // Decorations offset for x and y i.e. the space consumed by window decorations
+    pub(crate) fn decorations(&self, win: xcb::Window) -> WmCtlResult<(i32, i32)> {
+        let flags = ewmh::MOVE_RESIZE_WINDOW_X | ewmh::MOVE_RESIZE_WINDOW_Y;
+
+        // Shift the window to 0, 0
+        let (gravity, source, x, y, w, h) = (0, 2, 0, 0, 0, 0);
+        ewmh::request_move_resize_window(&self.conn, self.screen, win, gravity, source, flags, x, y, w, h).request_check()?;
+        self.flush();
+
+        // Now check the x, y offset to determine decoration size
+        let g = xcb::get_geometry(&self, win).get_reply()?;
+        let (x, y) = (g.x(), g.y());
+        debug!("decorations: id: {}, x: {}, y: {}", win, x, y);
+        Ok((x as i32, y as i32))
     }
 
-    // Get desktop work area
+    // Get window extents
     #[allow(dead_code)]
-    pub(crate) fn work_area(&self) -> WmCtlResult<(i32, i32, i32, i32)> {
-        let reply = ewmh::get_work_area(&self.conn, self.screen).get_reply()?;
-        let geo = reply.work_area().first().unwrap();
-        Ok((geo.x() as i32, geo.y() as i32, geo.width() as i32, geo.height() as i32))
+    pub(crate) fn win_extents(&self, win: xcb::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+        let e = ewmh::get_frame_extents(&self.conn, win).get_reply()?;
+        let (l, r, t, b) = (e.left(), e.right(), e.top(), e.bottom());
+        debug!("win_extents: id: {}, l: {}, r: {}, t: {}, b: {}", win, l, r, t, b);
+        Ok((l as i32, r as i32, t as i32, b as i32))
     }
 
     // Get window geometry
     pub(crate) fn win_geometry(&self, win: xcb::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
-        let geo = xcb::get_geometry(&self, win).get_reply()?;
-        Ok((geo.x() as i32, geo.y() as i32, geo.width() as i32, geo.height() as i32))
+        let g = xcb::get_geometry(&self, win).get_reply()?;
+        let (x, y, w, h) = (g.x(), g.y(), g.width(), g.height());
+        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
+        Ok((x as i32, y as i32, w as i32, h as i32))
     }
 
     // Get window pid
     #[allow(dead_code)]
     pub(crate) fn win_pid(&self, win: xcb::Window) -> WmCtlResult<u32> {
         let pid = ewmh::get_wm_pid(&self.conn, win).get_reply()?;
+        debug!("win_pid: id: {}, pid: {}", win, pid);
         Ok(pid)
+    }
+
+    // Get window reservations which is the space the window manager reserved at the edge of the
+    // screen for this window e.g. a taskbar at the bottom might have 25pixels reserved at the bottom.
+    pub(crate) fn win_reservations(&self, win: xcb::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+        let p = ewmh::get_wm_strut_partial(&self.conn, win).get_reply()?;
+        debug!("win_reservations: id: {}, l: {}, r: {}, t: {}, b: {}, {}, {}, {}, {}, {}, {}, {}, {}", win,
+            p.left(), p.right(), p.top(), p.bottom(), p.left_start_y(), p.left_end_y(), p.right_start_y(),
+            p.right_end_y(), p.top_start_x(), p.top_end_x(), p.bottom_start_x(), p.bottom_end_x());
+        Ok((p.left() as i32, p.right() as i32, p.top() as i32, p.bottom() as i32))
     }
 
     // Get window title
     pub(crate) fn win_title(&self, win: xcb::Window) -> WmCtlResult<String> {
-        let name = ewmh::get_wm_name(&self.conn, win).get_reply()?;
-        Ok(name.string().to_string())
+        let reply = ewmh::get_wm_name(&self.conn, win).get_reply()?;
+        let title = reply.string().to_string();
+        debug!("win_title: id: {}, title: {}", win, title);
+        Ok(title)
     }
 
     // Get window type
@@ -162,12 +185,42 @@ impl WmCtl {
     // 476 = panel
     pub(crate) fn win_type(&self, win: xcb::Window) -> WmCtlResult<u32> {
         let reply = ewmh::get_wm_window_type(&self.conn, win).get_reply()?;
-        Ok(*reply.atoms().first().unwrap())
+        let typ = *reply.atoms().first().unwrap();
+        debug!("win_type: id: {}, type: {}", win, typ);
+        Ok(typ)
     }
 
-    /// Get the active window id
-    pub(crate) fn active_win(&self) -> WmCtlResult<xcb::Window> {
-        Ok(ewmh::get_active_window(&self.conn, self.screen).get_reply()?)
+    // Remove maximizing attributes
+    pub(crate) fn remove_maximize(&self, win: xcb::Window) -> WmCtlResult<()> {
+        debug!("remove_maximize: id: {}", win);
+        ewmh::request_change_wm_state(&self.conn, self.screen, win, ewmh::STATE_REMOVE,
+            self.conn.WM_ACTION_MAXIMIZE_HORZ(), self.conn.WM_STATE_MAXIMIZED_VERT(), 0).request_check()?;
+        Ok(())
+    }
+
+    // Get the taskbar window
+    pub(crate) fn taskbar(&self) -> WmCtlResult<(Position, i32)> {
+        for win in ewmh::get_client_list(&self.conn, self.screen).get_reply()?.windows() {
+            if let Ok(geo) = xcb::get_geometry(&self.conn, *win).get_reply() {
+                let (x, y, w, h) = (geo.x() as i32, geo.y() as i32, geo.width() as i32, geo.height() as i32);
+                if (w == self.full_width as i32 && h == (self.full_height as i32 - self.work_height as i32)) ||
+                    (h == self.full_height as i32 && w == (self.full_width as i32 - self.work_width as i32)) {
+                    debug!("taskbar: id: {}, x: {}, y: {}, w: {}, h: {}", *win, x, y, w, h);
+                    let (l, r, t, b) = self.win_reservations(*win)?;
+                    if l > 0 {
+                        return Ok((Position::Left, l as i32))
+                    } else if r > 0 {
+                        return Ok((Position::Right, r as i32))
+                    } else if t > 0 {
+                        return Ok((Position::Top, t as i32))
+                    } else if b > 0 {
+                        return Ok((Position::Bottom, b as i32))
+                    }
+                    return Err(WinError::TaskbarReservationNotFound.into())
+                }
+            }
+        }
+        Err(WinError::TaskbarNotFound.into())
     }
 
     /// Get all the windows
@@ -181,5 +234,14 @@ impl WmCtl {
             }
         }
         Ok(windows)
+    }
+
+    // Get desktop work area
+    pub(crate) fn work_area(&self) -> WmCtlResult<(i32, i32, i32, i32)> {
+        let reply = ewmh::get_work_area(&self.conn, self.screen).get_reply()?;
+        let g = reply.work_area().first().unwrap();
+        let (x, y, w, h) = (g.x(), g.y(), g.width(), g.height());
+        debug!("work_area: x: {}, y: {}, w: {}, h: {}", x, y, w, h);
+        Ok((x as i32, y as i32, w as i32, h as i32))
     }
 }
