@@ -30,7 +30,7 @@ pub fn list_windows() -> WmCtlResult<()> {
 /// Move the active window without changing its size
 pub fn move_win(position: Position) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
-    wmctl.windows()?;
+    // wmctl.windows()?;
     // let win = wmctl.active_win()?;
     // wmctl.move_win(win, position)?;
     Ok(())

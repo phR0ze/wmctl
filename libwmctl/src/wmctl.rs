@@ -14,20 +14,26 @@ use std::collections::HashMap;
 use std::{str, ops::Deref};
 use tracing::debug;
 
-use x11rb::{
-    protocol::{
-        xinerama,
-        xproto::{self, ConnectionExt},
-    },
-    connection::Connection,
-    wrapper::ConnectionExt as OtherConnectionExt,
-    rust_connection::RustConnection,
-};
-use x11rb::*;
+use x11rb::atom_manager;
+use x11rb::connection::Connection;
+use x11rb::errors::{ReplyError, ReplyOrIdError};
+use x11rb::protocol::xproto::{ConnectionExt as _, *};
+use x11rb::protocol::Event;
+use x11rb::wrapper::ConnectionExt;
+use x11rb::xcb_ffi::XCBConnection;
+
+// A collection of the atoms we will need.
+atom_manager! {
+    pub AtomCollection: AtomCollectionCookie {
+        _NET_ACTIVE_WINDOW,
+        _NET_WM_NAME,
+        UTF8_STRING,
+    }
+}
 
 pub(crate) struct WmCtl
 {
-    pub(crate) conn: RustConnection,    // window manager connection
+//     pub(crate) conn: RustConnection,    // window manager connection
     pub(crate) screen: usize,           // screen number
     pub(crate) root: u32,               // root window id
     pub(crate) width: u16,              // screen width
@@ -43,11 +49,20 @@ pub(crate) struct WmCtl
 // 	}
 // }
 
+// Check if a composit manager is running
+pub(crate) fn composite_manager(conn: &impl Connection, screen_num: usize) -> WmCtlResult<bool> {
+    let atom = format!("_NET_WM_CM_S{}", screen_num);
+    let atom = conn.intern_atom(false, atom.as_bytes())?.reply()?.atom;
+    let reply = conn.get_selection_owner(atom)?.reply()?;
+    Ok(reply.owner != x11rb::NONE)
+}
+
 // Connect to the X11 server
 impl WmCtl
 {
     pub(crate) fn connect() -> WmCtlResult<Self> {
-        let (conn, screen) = x11rb::connect(None)?;
+        let (conn, screen) = XCBConnection::connect(None)?;
+        let atoms = AtomCollection::new(&conn)?.reply()?;
 
         // Get the screen size
         let (width, height, root) = {
@@ -55,8 +70,18 @@ impl WmCtl
             (screen.width_in_pixels, screen.height_in_pixels, screen.root)
         };
 
-        debug!("connect: screen: {}, root: {}, w: {}, h: {}", screen, root, width, height);
-        Ok(Self{conn, screen, root, width, height})
+        println!("Composit Manager: {}", composite_manager(&conn, screen)?);
+
+        // let reply = conn.get_property(false, root, atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, std::u32::MAX)?.reply()?;
+        // let win = reply.value.first().unwrap();
+        // println!("ACTIVE: {}", win);
+        // let reply = conn.get_property(false, *win as u32, AtomEnum::WM_NAME, AtomEnum::STRING, 0, std::u32::MAX)?.reply()?;
+        // let name = str::from_utf8(&reply.value)?.to_string();
+        // println!("NAME: {}", name);
+
+        println!("connect: screen: {}, root: {}, w: {}, h: {}", screen, root, width, height);
+
+        Ok(Self{ screen, root, width, height})
     }
 
     // /// Get the active window id
@@ -156,12 +181,12 @@ impl WmCtl
     // }
 
     // Get window geometry
-    pub(crate) fn win_geometry(&self, win: u32) -> WmCtlResult<(i32, i32, i32, i32)> {
-        let g = self.conn.get_geometry(win)?.reply()?;
-        let (x, y, w, h) = (g.x, g.y, g.width, g.height);
-        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
-        Ok((x as i32, y as i32, w as i32, h as i32))
-    }
+    // pub(crate) fn win_geometry(&self, win: u32) -> WmCtlResult<(i32, i32, i32, i32)> {
+    //     let g = self.conn.get_geometry(win)?.reply()?;
+    //     let (x, y, w, h) = (g.x, g.y, g.width, g.height);
+    //     debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
+    //     Ok((x as i32, y as i32, w as i32, h as i32))
+    // }
 
     // // Get window pid
     // #[allow(dead_code)]
@@ -182,12 +207,12 @@ impl WmCtl
     // }
 
     // Get window name
-    pub(crate) fn win_name(&self, win: u32) -> WmCtlResult<String> {
-        let reply = self.conn.get_property(false, win, AtomEnum::WM_NAME, AtomEnum::STRING, 0, std::u32::MAX)?.reply()?;
-        let name = str::from_utf8(&reply.value)?.to_string();
-        debug!("win_name: id: {}, name: {}", win, name);
-        Ok(name)
-    }
+    // pub(crate) fn win_name(&self, win: u32) -> WmCtlResult<String> {
+    //     let reply = self.conn.get_property(false, win, AtomEnum::WM_NAME, AtomEnum::STRING, 0, std::u32::MAX)?.reply()?;
+    //     let name = str::from_utf8(&reply.value)?.to_string();
+    //     debug!("win_name: id: {}, name: {}", win, name);
+    //     Ok(name)
+    // }
 /*  */
     // // Get window type
     // // 390 = app
@@ -246,11 +271,11 @@ impl WmCtl
     pub(crate) fn windows(&self) -> WmCtlResult<Vec<(u32, String)>> {
         let mut windows = vec![];
 
-        let active_win_atom = self._active_win()?;
-        println!("root: {}", self.root);
-        println!("atom: {}", active_win_atom);
-        let reply = self.conn.get_property(false, self.root, self._active_win()?, xproto::AtomEnum::ATOM, 0, std::u32::MAX)?.reply()?;
-        println!("{:?}", reply);
+        // let active_win_atom = self._active_win()?;
+        // println!("root: {}", self.root);
+        // println!("atom: {}", active_win_atom);
+        // let reply = self.conn.get_property(false, self.root, self._active_win()?, xproto::AtomEnum::ATOM, 0, std::u32::MAX)?.reply()?;
+        // println!("{:?}", reply);
 
         // // Setup requests to get all window attributes and geometries
         // let tree = self.conn.query_tree(self.root)?.reply()?;
@@ -295,95 +320,95 @@ impl WmCtl
     // https://en.wikipedia.org/wiki/Extended_Window_Manager_Hints
     // ---------------------------------------------------------------------------------------------
 
-    // Window manager protocols
-    pub(crate) fn _wm_protocols(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"WM_PROTOCOLS")?.reply()?.atom)
-    }
+    // // Window manager protocols
+    // pub(crate) fn _wm_protocols(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"WM_PROTOCOLS")?.reply()?.atom)
+    // }
 
-    // Lists all the EWWH protocols supported by this WM
-    pub(crate) fn _supported(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_SUPPORTED")?.reply()?.atom)
-    }
+    // // Lists all the EWWH protocols supported by this WM
+    // pub(crate) fn _supported(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_SUPPORTED")?.reply()?.atom)
+    // }
 
-    // Indicates the number of virtual desktops
-    pub(crate) fn _num_desktops(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_NUMBER_OF_DESKTOPS")?.reply()?.atom)
-    }
+    // // Indicates the number of virtual desktops
+    // pub(crate) fn _num_desktops(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_NUMBER_OF_DESKTOPS")?.reply()?.atom)
+    // }
 
-    // Defines the common size of all desktops
-    pub(crate) fn _desktop_geometry(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_DESKTOP_GEOMETRY")?.reply()?.atom)
-    }
+    // // Defines the common size of all desktops
+    // pub(crate) fn _desktop_geometry(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_DESKTOP_GEOMETRY")?.reply()?.atom)
+    // }
 
-    // Defines the top left corner of each desktop
-    pub(crate) fn _desktop_viewport(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_DESKTOP_VIEWPORT")?.reply()?.atom)
-    }
+    // // Defines the top left corner of each desktop
+    // pub(crate) fn _desktop_viewport(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_DESKTOP_VIEWPORT")?.reply()?.atom)
+    // }
 
-    // Get/set the currently active window
-    pub(crate) fn _active_win(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_ACTIVE_WINDOW")?.reply()?.atom)
-    }
+    // // Get/set the currently active window
+    // pub(crate) fn _active_win(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_ACTIVE_WINDOW")?.reply()?.atom)
+    // }
 
-    // Contains a geometry for each desktop
-    pub(crate) fn _work_area(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WORKAREA")?.reply()?.atom)
-    }
+    // // Contains a geometry for each desktop
+    // pub(crate) fn _work_area(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WORKAREA")?.reply()?.atom)
+    // }
 
-    // Give the window of the active WM
-    pub(crate) fn _win_manger(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_SUPPORTING_WM_CHECK")?.reply()?.atom)
-    }
+    // // Give the window of the active WM
+    // pub(crate) fn _win_manger(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_SUPPORTING_WM_CHECK")?.reply()?.atom)
+    // }
 
-    // Interactively resize and application window
-    pub(crate) fn _wm_moveresize(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_MOVERESIZE")?.reply()?.atom)
-    }
+    // // Interactively resize and application window
+    // pub(crate) fn _wm_moveresize(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_MOVERESIZE")?.reply()?.atom)
+    // }
 
-    // Immediately resize an application window
-    pub(crate) fn _moveresize_win(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_MOVERESIZE_WINDOW")?.reply()?.atom)
-    }
+    // // Immediately resize an application window
+    // pub(crate) fn _moveresize_win(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_MOVERESIZE_WINDOW")?.reply()?.atom)
+    // }
 
-    // The left, right, top and bottom frame sizes
-    pub(crate) fn _frame_extents(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_REQUEST_FRAME_EXTENTS")?.reply()?.atom)
-    }
+    // // The left, right, top and bottom frame sizes
+    // pub(crate) fn _frame_extents(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_REQUEST_FRAME_EXTENTS")?.reply()?.atom)
+    // }
     
-    // Title of the window
-    pub(crate) fn _win_name(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_NAME")?.reply()?.atom)
-    }
+    // // Title of the window
+    // pub(crate) fn _win_name(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_NAME")?.reply()?.atom)
+    // }
 
-    // The window title as shown by the WM
-    pub(crate) fn _win_visiable_name(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_VISIBLE_NAME")?.reply()?.atom)
-    }
+    // // The window title as shown by the WM
+    // pub(crate) fn _win_visiable_name(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_VISIBLE_NAME")?.reply()?.atom)
+    // }
 
-    // The icon title
-    pub(crate) fn _win_icon_name(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_ICON_NAME")?.reply()?.atom)
-    }
+    // // The icon title
+    // pub(crate) fn _win_icon_name(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_ICON_NAME")?.reply()?.atom)
+    // }
     
-    // The icon title as shown by the WM
-    pub(crate) fn _win_visiable_icon_name(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_VISIBLE_ICON_NAME")?.reply()?.atom)
-    }
+    // // The icon title as shown by the WM
+    // pub(crate) fn _win_visiable_icon_name(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_VISIBLE_ICON_NAME")?.reply()?.atom)
+    // }
 
-    // The desktop the window is in
-    pub(crate) fn _win_desktop(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_DESKTOP")?.reply()?.atom)
-    }
+    // // The desktop the window is in
+    // pub(crate) fn _win_desktop(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_DESKTOP")?.reply()?.atom)
+    // }
 
-    // The functional type of the window
-    pub(crate) fn _win_type(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_WINDOW_TYPE")?.reply()?.atom)
-    }
+    // // The functional type of the window
+    // pub(crate) fn _win_type(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_WINDOW_TYPE")?.reply()?.atom)
+    // }
 
-    // The current window state
-    pub(crate) fn _win_state(&self) -> WmCtlResult<xproto::Atom> {
-        Ok(self.conn.intern_atom(false, b"_NET_WM_STATE")?.reply()?.atom)
-    }
+    // // The current window state
+    // pub(crate) fn _win_state(&self) -> WmCtlResult<xproto::Atom> {
+    //     Ok(self.conn.intern_atom(false, b"_NET_WM_STATE")?.reply()?.atom)
+    // }
 
     // conn.intern_atom(false, b"_NET_WM_STATE_ABOVE")?.reply()?.atom,
     // conn.intern_atom(false, b"_NET_WM_STATE_STICKY")?.reply()?.atom,
