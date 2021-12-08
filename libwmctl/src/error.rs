@@ -16,17 +16,16 @@ pub enum WmCtlError {
     // A shape error
     Shape(ShapeError),
 
-    // XCB connect error
-    Conn(xcb::base::ConnError),
-
-    // XCB reply error
-    Reply(xcb::base::ReplyError),
+    // A window error
+    Win(WinError),
 
     // std::str::Utf8Error
     Utf8(std::str::Utf8Error),
 
-    // A window error
-    Win(WinError),
+    // x11rb errors
+    Connect(x11rb::errors::ConnectError),
+    Connection(x11rb::errors::ConnectionError),
+    Reply(x11rb::errors::ReplyError),
 }
 impl WmCtlError {
     /// Implemented directly on the `Error` type to reduce casting required
@@ -57,10 +56,11 @@ impl fmt::Display for WmCtlError {
         match *self {
             WmCtlError::Position(ref err) => write!(f, "{}", err),
             WmCtlError::Shape(ref err) => write!(f, "{}", err),
-            WmCtlError::Conn(ref err) => write!(f, "{}", err),
-            WmCtlError::Reply(ref err) => write!(f, "{}", err),
-            WmCtlError::Utf8(ref err) => write!(f, "{}", err),
             WmCtlError::Win(ref err) => write!(f, "{}", err),
+            WmCtlError::Utf8(ref err) => write!(f, "{}", err),
+            WmCtlError::Connect(ref err) => write!(f, "{}", err),
+            WmCtlError::Connection(ref err) => write!(f, "{}", err),
+            WmCtlError::Reply(ref err) => write!(f, "{}", err),
         }
     }
 }
@@ -70,10 +70,11 @@ impl AsRef<dyn StdError> for WmCtlError {
         match *self {
             WmCtlError::Position(ref err) => err,
             WmCtlError::Shape(ref err) => err,
-            WmCtlError::Conn(ref err) => err,
-            WmCtlError::Reply(ref err) => err,
-            WmCtlError::Utf8(ref err) => err,
             WmCtlError::Win(ref err) => err,
+            WmCtlError::Utf8(ref err) => err,
+            WmCtlError::Connect(ref err) => err,
+            WmCtlError::Connection(ref err) => err,
+            WmCtlError::Reply(ref err) => err,
         }
     }
 }
@@ -83,29 +84,38 @@ impl AsMut<dyn StdError> for WmCtlError {
         match *self {
             WmCtlError::Position(ref mut err) => err,
             WmCtlError::Shape(ref mut err) => err,
-            WmCtlError::Conn(ref mut err) => err,
-            WmCtlError::Reply(ref mut err) => err,
-            WmCtlError::Utf8(ref mut err) => err,
             WmCtlError::Win(ref mut err) => err,
+            WmCtlError::Utf8(ref mut err) => err,
+            WmCtlError::Connect(ref mut err) => err,
+            WmCtlError::Connection(ref mut err) => err,
+            WmCtlError::Reply(ref mut err) => err,
         }
-    }
-}
-
-impl From<xcb::base::ConnError> for WmCtlError {
-    fn from(err: xcb::base::ConnError) -> WmCtlError {
-        WmCtlError::Conn(err)
-    }
-}
-
-impl From<xcb::base::ReplyError> for WmCtlError {
-    fn from(err: xcb::base::ReplyError) -> WmCtlError {
-        WmCtlError::Reply(err)
     }
 }
 
 impl From<std::str::Utf8Error> for WmCtlError {
     fn from(err: std::str::Utf8Error) -> WmCtlError {
         WmCtlError::Utf8(err)
+    }
+}
+
+// x11rb errors
+//--------------------------------------------------------------------------------------------------
+impl From<x11rb::errors::ConnectError> for WmCtlError {
+    fn from(err: x11rb::errors::ConnectError) -> WmCtlError {
+        WmCtlError::Connect(err)
+    }
+}
+
+impl From<x11rb::errors::ConnectionError> for WmCtlError {
+    fn from(err: x11rb::errors::ConnectionError) -> WmCtlError {
+        WmCtlError::Connection(err)
+    }
+}
+
+impl From<x11rb::errors::ReplyError> for WmCtlError {
+    fn from(err: x11rb::errors::ReplyError) -> WmCtlError {
+        WmCtlError::Reply(err)
     }
 }
 
