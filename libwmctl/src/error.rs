@@ -6,33 +6,27 @@ pub type WmCtlResult<T> = std::result::Result<T, ErrorWrapper>;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WmCtlError {
-    ActiveWinNotFound,
-    InvalidDesktopNum,
     InvalidPosition(String),
     InvalidShape(String),
     InvalidWinClass(u32),
     InvalidWinState(u32),
     InvalidWinType(u32),
+    PropertyNotFound(String),
     TaskbarNotFound,
     TaskbarReservationNotFound,
-    WinNameNotFound,
-    WinTypeNotFound,
 }
 impl std::error::Error for WmCtlError {}
 impl fmt::Display for WmCtlError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            WmCtlError::ActiveWinNotFound => write!(f, "active window was not found"),
-            WmCtlError::InvalidDesktopNum => write!(f, "invalid desktop number found"),
             WmCtlError::InvalidPosition(ref err) => write!(f, "invalid position was given: {}", err),
             WmCtlError::InvalidShape(ref err) => write!(f, "invalid shape was given: {}", err),
             WmCtlError::InvalidWinClass(ref err) => write!(f, "invalid class was given: {}", err),
             WmCtlError::InvalidWinState(ref err) => write!(f, "invalid state was given: {}", err),
             WmCtlError::InvalidWinType(ref err) => write!(f, "invalid type was given: {}", err),
+            WmCtlError::PropertyNotFound(ref err) => write!(f, "property {} was not found", err),
             WmCtlError::TaskbarNotFound => write!(f, "taskbar not found"),
             WmCtlError::TaskbarReservationNotFound => write!(f, "taskbar reservation not found"),
-            WmCtlError::WinNameNotFound => write!(f, "window name was not found"),
-            WmCtlError::WinTypeNotFound => write!(f, "window type was not found"),
         }
     }
 }

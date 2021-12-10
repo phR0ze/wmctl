@@ -191,7 +191,10 @@ impl fmt::Display for WinState {
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WinType {
+    Combo,
+    Desktop,
     Dialog,
+    DND,
     Dock,
     DropDownMenu,
     Menu,
@@ -209,8 +212,14 @@ pub(crate) enum WinType {
 impl WinType
 {
     pub(crate) fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinType> {
-        if val == atoms._NET_WM_WINDOW_TYPE_DIALOG {
+        if val == atoms._NET_WM_WINDOW_TYPE_COMBO {
+            Ok(WinType::Combo)
+        } else if val == atoms._NET_WM_WINDOW_TYPE_DESKTOP {
+            Ok(WinType::Desktop)
+        } else if val == atoms._NET_WM_WINDOW_TYPE_DIALOG {
             Ok(WinType::Dialog)
+        } else if val == atoms._NET_WM_WINDOW_TYPE_DND {
+            Ok(WinType::DND)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DOCK {
             Ok(WinType::Dock)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DROPDOWN_MENU {

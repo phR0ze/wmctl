@@ -33,7 +33,7 @@ pub fn info() -> WmCtlResult<()> {
     println!();
 
     println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "CLASS", "STATE", "SIZE", "POS", "STRUT", "EXTENTS","NAME");
-    let desktop = 5;
+    let desktop = wmctl.win_desktop(win)?;
     let typ = wmctl.win_type(win)?;
     let (class, state) = wmctl.win_attributes(win)?;
     let (x, y, w, h) = wmctl.win_geometry(win)?;
