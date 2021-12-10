@@ -31,14 +31,14 @@ fn init() -> Result<()> {
         // Version command
         .subcommand(SubCommand::with_name("version").alias("v").alias("ver").about("Print version information"))
 
-        // Resolution
-        .subcommand(SubCommand::with_name("resolution").about("List out display resolution")
-            .long_about(r"List out display resolution
+        // Info
+        .subcommand(SubCommand::with_name("info").about("List out X11 information")
+            .long_about(r"List out X11 information i.e. resolution, workspace size, windows
 
 Examples:
 
-# List out display resolution
-winctl res
+# List out X11 information
+winctl info
 "))
  
         // List out all the windows
@@ -111,13 +111,17 @@ winctl shape square
         println!("{:<w$} {}", "Build Date:", APP_BUILD_DATE, w = 18);
         println!("{:<w$} {}", "Git Commit:", APP_GIT_COMMIT, w = 18);
 
+    // info
+    } else if let Some(_) = matches.subcommand_matches("info") {
+        libwmctl::info().pass()?;
+
     // list
     } else if let Some(_) = matches.subcommand_matches("list") {
         libwmctl::list_windows().pass()?;
 
     // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
-        let position = Position::try_from(matches.value_of("POSITION").unwrap()).pass()?;
+        let position = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
         libwmctl::move_win(position).pass()?;
 
     // resize
@@ -126,14 +130,9 @@ winctl shape square
         let y_ratio = matches.value_of("H_RATIO").unwrap().parse::<u32>().wrap("Failed to convert Y_RATIO into a valid 1-100 int")?;
         libwmctl::resize_and_center(x_ratio, y_ratio).pass()?;
 
-    // resolution
-    } else if let Some(_) = matches.subcommand_matches("resolution") {
-        let (w, h) = libwmctl::resolution().pass()?;
-        println!("{}x{}", w, h);
-
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
-        let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
+        let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
         libwmctl::shape_win(shape).pass()?;
     }
 

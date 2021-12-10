@@ -21,8 +21,7 @@
             },
             "args": [
                 "-d",
-                "move",
-                "right"
+                "list"
             ],
             "cwd": "${workspaceFolder}"
         },

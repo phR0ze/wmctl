@@ -1,14 +1,9 @@
-mod error;
-mod position;
-mod shape;
-mod win;
 mod wmctl;
-
-use error::*;
-use shape::*;
-use position::*;
-use win::*;
+mod error;
+mod model;
 use wmctl::*;
+use error::*;
+use model::*;
 
 /// All essential symbols in a simple consumable form
 ///
@@ -17,22 +12,54 @@ use wmctl::*;
 /// use libwmctl::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::{error::*, shape::*, position::*};
+    pub use crate::*;
+    pub use error::*;
+    pub use model::*;
+}
+
+/// Get x11 info
+pub fn info() -> WmCtlResult<()> {
+    let wmctl = WmCtl::connect()?;
+    println!("X11 Information");
+    println!("-----------------------------------------------------------------------");
+    println!("Screen Size:       {}x{}", wmctl.width, wmctl.height);
+    println!("Root Window:       {}", wmctl.root);
+    println!("Composite Manager: {}", wmctl.composite_manager()?);
+    println!("Active Window:     {}", wmctl.active_win()?);
+    //println!("Work area:    {}x{}", wmctl.work_width, wmctl.work_height);
+    println!("Desktops:          {}", wmctl.desktops()?);
+    //println!("Taskbar:      {} at {}", wmctl.taskbar_size, wmctl.taskbar);
+    println!();
+    Ok(())
 }
 
 /// List out all the current window ids and their titles
 pub fn list_windows() -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
-    wmctl.windows()?;
+
+    // println!("{:<9} {:<11} {:<8} {:<5} {:<10} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "POS", "SIZE", "STRUT", "EXTENTS","NAME");
+    println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "CLASS", "STATE", "SIZE", "POS", "STRUT", "EXTENTS","NAME");
+    for (id, name, typ, class, state, (x, y, w, h)) in wmctl.windows()? {
+        let desktop = wmctl.win_desktop(id)?;
+    //     let (x, y, w, h) = wmctl.win_geometry(id)?;
+    //     let typ = wmctl.win_type(id)?;
+    //     let (l, r, t, b, lsy, ley, rsy, rey, tsx, tex, bsx, bex) = wmctl.win_reservations(id)?;
+    //     let (el, er, et, eb) = wmctl.win_extents(id)?;
+        println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {}", id, desktop, typ.to_string(), class.to_string(), state.to_string(),
+            format!("{}x{}", w, h), format!("{}x{}", x, y), name);
+        //println!("{:<9} {:<8} {:<10} {:<5} {:<10} {:<28} {:<9} {}", id, desktop, typ.to_string(), format!("{}x{}", x, y),
+    //         format!("{}x{}", w, h), format!("{},{},{},{},{},{},{},{},{},{},{},{}", l, r, t, b, lsy, ley, rsy, rey, tsx, tex, bsx, bex),
+    //         format!("{},{},{},{}", el, er, et, eb), name);
+    }
     Ok(())
 }
 
 /// Move the active window without changing its size
-pub fn move_win(position: Position) -> WmCtlResult<()> {
-    let wmctl = WmCtl::connect()?;
-    // wmctl.windows()?;
-    // let win = wmctl.active_win()?;
-    // wmctl.move_win(win, position)?;
+pub fn move_win(position: WinPosition) -> WmCtlResult<()> {
+    // let wmctl = WmCtl::connect()?;
+    // let id = wmctl.active_win()?;
+    // let typ = wmctl.win_type(id)?;
+    //wmctl.move_win(id, position)?;
     Ok(())
 }
 
@@ -44,7 +71,7 @@ pub fn resize_and_center(x_ratio: u32, y_ratio: u32) -> WmCtlResult<()> {
     // let win = wmctl.active_win()?;
 
     // // Remove maximizing states
-    // wmctl.remove_maximize(win)?;
+    // wmctl.win_remove_maximize(win)?;
 
     // // Calculate window size
     // let (w, h) =  ((wmctl.work_width as f64 * x_ratio) as i32, (wmctl.work_height as f64 * y_ratio) as i32);
@@ -57,10 +84,10 @@ pub fn resize_and_center(x_ratio: u32, y_ratio: u32) -> WmCtlResult<()> {
 }
 
 /// Shape the active window without moving it
-pub fn shape_win(shape: Shape) -> WmCtlResult<()> {
+pub fn shape_win(shape: WinShape) -> WmCtlResult<()> {
     // let wmctl = WmCtl::connect()?;
     // let win = wmctl.active_win()?;
-    // wmctl.remove_maximize(win)?;
+    // wmctl.win_remove_maximize(win)?;
 
     // // Set longer side to shorter side
     // //let 4x3 = 
@@ -82,14 +109,6 @@ pub fn shape_win(shape: Shape) -> WmCtlResult<()> {
     // wmctl.move_and_resize(win, x, y, w, h)?;
     Ok(())
 }
-
-/// Get screen resolution
-pub fn resolution() -> WmCtlResult<(u32, u32)> {
-    // let wmctl = WmCtl::connect()?;
-    // Ok((wmctl.full_width as u32, wmctl.full_height as u32))
-    Ok((0, 0))
-}
-
 
 #[cfg(test)]
 mod tests {

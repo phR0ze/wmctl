@@ -1,6 +1,6 @@
 [package]
 name = "libwmctl"
-version = "0.0.8"
+version = "0.0.9"
 edition = "2018"
 authors = ["phR0ze"]
 license = "MIT OR Apache-2.0"
@@ -9,4 +9,8 @@ repository = "https://github.com/phR0ze/wmctl"
 
 [dependencies]
 tracing = "0.1"
-x11rb = { version = "0.9.0", features = ["dl-libxcb"] }
+
+# Requires `allow-unsafe-code` to enable XCB support for EWMH
+[dependencies.x11rb]
+version = "0.9.0"
+features = ["allow-unsafe-code"]
