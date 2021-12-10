@@ -9,7 +9,7 @@
 //
 // The EWMH spec defines a number of properties that EWHM compliant window managers will maintain
 // and return to clients requesting information.
-use crate::{WmCtlResult, WinPosition, WmCtlError, WinClass, WinState, WinType};
+use crate::{WmCtlResult, WinPosition, WmCtlError, WinClass, WinMap, WinState, WinType};
 use std::{str, ops::Deref};
 use tracing::{trace, debug};
 
@@ -27,10 +27,26 @@ atom_manager! {
     pub(crate) AtomCollection: AtomCollectionCookie {
         _NET_ACTIVE_WINDOW,
         _NET_CLIENT_LIST,
+        _NET_FRAME_EXTENTS,
         _NET_NUMBER_OF_DESKTOPS,
         _NET_WORKAREA,
         _NET_WM_DESKTOP,
         _NET_WM_NAME,
+        _NET_WM_PID,
+        _NET_WM_STATE,
+        _NET_WM_STATE_ABOVE,
+        _NET_WM_STATE_BELOW,
+        _NET_WM_STATE_DEMANDS_ATTENTION,
+        _NET_WM_STATE_FOCUSED,
+        _NET_WM_STATE_FULLSCREEN,
+        _NET_WM_STATE_HIDDEN,
+        _NET_WM_STATE_MAXIMIZED_VERT,
+        _NET_WM_STATE_MAXIMIZED_HORZ,
+        _NET_WM_STATE_MODAL,
+        _NET_WM_STATE_SHADED,
+        _NET_WM_STATE_SKIP_PAGER,
+        _NET_WM_STATE_SKIP_TASKBAR,
+        _NET_WM_STATE_STICKY,
         _NET_WM_VISIBLE_NAME,
         _NET_WM_WINDOW_TYPE,
         _NET_WM_WINDOW_TYPE_COMBO,
@@ -154,22 +170,38 @@ impl WmCtl
     }
 
     // Get window attribrtes
-    pub(crate) fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinState)> {
+    pub(crate) fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)> {
         let attr = self.get_window_attributes(win)?.reply()?;
         debug!("win_attributes: id: {}, class: {:?}, state: {:?}", win, attr.class, attr.map_state);
-        Ok((WinClass::from(attr.class.into())?, WinState::from(attr.map_state.into())?))
+        Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
     }
 
     // Get window desktop
     // Defined as: _NET_WM_DESKTOP desktop, CARDINAL/32
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_DESKTOP`
     // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
-    // retrieve the values of which there will.
+    // retrieve the values of which there will be a single value.
     pub(crate) fn win_desktop(&self, win: xproto::Window) -> WmCtlResult<i32> {
         let reply = self.get_property(false, win, self.atoms._NET_WM_DESKTOP, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let desktop = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_DESKTOP".to_owned()))?;
         debug!("win_desktop: id: {}, desktop: {}", win, desktop);
         Ok(desktop as i32)
+    }
+
+    // Get window frame border values added by the window manager
+    // Defined as: _NET_FRAME_EXTENTS, left, right, top, bottom, CARDINAL[4]/32
+    // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_FRAME_EXTENTS`
+    // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+    // retrieve the values of which there will be...
+    pub(crate) fn win_borders(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+        let reply = self.get_property(false, win, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS".to_owned()))?;
+        let l = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS left".to_owned()))?;
+        let r = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS right".to_owned()))?;
+        let t = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS top".to_owned()))?;
+        let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
+        debug!("win_extents: id: {}, l: {}, r: {}, t: {}, b: {}", win, l, r, t, b);
+        Ok((l as i32, r as i32, t as i32, b as i32))
     }
 
     // Get window geometry
@@ -222,6 +254,34 @@ impl WmCtl
 
         // No valid name was found
         Err(WmCtlError::PropertyNotFound("_NET_WM_NAME | _WM_NAME".to_owned()).into())
+    }
+
+    // Get window pid
+    // Defined as: _NET_WM_PID, CARDINAL/32
+    // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_PID`
+    // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+    // retrieve the values of which there will be a single value.
+    pub(crate) fn win_pid(&self, win: xproto::Window) -> WmCtlResult<i32> {
+        let reply = self.get_property(false, win, self.atoms._NET_WM_PID, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let pid = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_PID".to_owned()))?;
+        debug!("win_pid: id: {}, pid: {:?}", win, pid);
+        Ok(pid as i32)
+    }
+
+    // Get window state
+    // Defined as: _NET_WM_STATE, ATOM[]
+    // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_STATE`
+    // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
+    // retrieve the values of which there will be a single value.
+    pub(crate) fn win_state(&self, win: xproto::Window) -> WmCtlResult<Vec<WinState>> {
+        let mut states = vec![];
+        let reply = self.get_property(false, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+        for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
+            let state = WinState::from(&self.atoms, state)?;
+            debug!("win_state: id: {}, state: {}", win, state);
+            states.push(state);
+        }
+        Ok(states)
     }
 
     // Get window type

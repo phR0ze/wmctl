@@ -25,12 +25,26 @@ pub fn info() -> WmCtlResult<()> {
     println!("-----------------------------------------------------------------------");
     println!("Root Window:       {}", wmctl.root);
     println!("Composite Manager: {}", wmctl.composite_manager()?);
-    println!("Active Window:     {}", win);
     println!("Work area:         {}x{}", wmctl.work_width, wmctl.work_height);
     println!("Screen Size:       {}x{}", wmctl.width, wmctl.height);
     println!("Desktops:          {}", wmctl.desktops()?);
-    //println!("Taskbar:      {} at {}", wmctl.taskbar_size, wmctl.taskbar);
+    //println!("Taskbar:           {} at {}", wmctl.taskbar_size, wmctl.taskbar);
     println!();
+    println!("Active Window");
+    println!("{:-<120}", "");
+    println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", "ID", "PID", "DESKTOP", "TYPE", "CLASS", "MAP", "STATE", "SIZE", "POS", "BORDERS", "NAME");
+    let pid = wmctl.win_pid(win).unwrap_or(-1);
+    let desktop = wmctl.win_desktop(win).unwrap_or(-1);
+    let typ = wmctl.win_type(win).unwrap_or(WinType::Invalid);
+    let (class, map) = wmctl.win_attributes(win)?;
+    let states = wmctl.win_state(win).unwrap_or(vec![WinState::Invalid]);
+    let (x, y, w, h) = wmctl.win_geometry(win)?;
+    let (l, r, t, b) = wmctl.win_borders(win).unwrap_or((0, 0, 0, 0));
+    let name = wmctl.win_name(win).unwrap_or("".to_owned());
+    println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", win, pid, desktop,
+        typ.to_string(), class.to_string(), map.to_string(), format!("{:?}", states),
+        format!("{},{}", w, h), format!("{},{}", x, y), format!("{},{},{},{}", l, r, t, b), name);
+
     Ok(())
 }
 
@@ -38,19 +52,23 @@ pub fn info() -> WmCtlResult<()> {
 pub fn list(all: bool) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
 
-    println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "CLASS", "STATE", "SIZE", "POS", "STRUT", "EXTENTS","NAME");
+    println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", "ID", "PID", "DESKTOP", "TYPE", "CLASS", "MAP", "STATE", "SIZE", "POS", "BORDERS", "NAME");
     let windows = match all {
         true => wmctl.all_windows()?,
         false => wmctl.windows()?,
     };
     for win in windows {
+        let pid = wmctl.win_pid(win).unwrap_or(-1);
         let desktop = wmctl.win_desktop(win).unwrap_or(-1);
         let typ = wmctl.win_type(win).unwrap_or(WinType::Invalid);
-        let (class, state) = wmctl.win_attributes(win)?;
+        let (class, map) = wmctl.win_attributes(win)?;
+        let states = wmctl.win_state(win).unwrap_or(vec![WinState::Invalid]);
         let (x, y, w, h) = wmctl.win_geometry(win)?;
+        let (l, r, t, b) = wmctl.win_borders(win).unwrap_or((0, 0, 0, 0));
         let name = wmctl.win_name(win).unwrap_or("".to_owned());
-        println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {}", win, desktop, typ.to_string(), class.to_string(), state.to_string(),
-            format!("{},{}", w, h), format!("{},{}", x, y), name);
+        println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", win, pid, desktop,
+            typ.to_string(), class.to_string(), map.to_string(), format!("{:?}", states),
+            format!("{},{}", w, h), format!("{},{}", x, y), format!("{},{},{},{}", l, r, t, b), name);
     }
     Ok(())
 }
