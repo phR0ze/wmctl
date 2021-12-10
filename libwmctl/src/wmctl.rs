@@ -19,6 +19,7 @@ use x11rb::{
     protocol::xproto::{ConnectionExt as _, self, *},
     wrapper::ConnectionExt as _,
     xcb_ffi::XCBConnection,
+    rust_connection::RustConnection,
 };
 
 // A collection of the atoms we will need.
@@ -26,6 +27,7 @@ atom_manager! {
     pub(crate) AtomCollection: AtomCollectionCookie {
         _NET_ACTIVE_WINDOW,
         _NET_NUMBER_OF_DESKTOPS,
+        _NET_WORKAREA,
         _NET_WM_DESKTOP,
         _NET_WM_NAME,
         _NET_WM_WINDOW_TYPE,
@@ -47,52 +49,53 @@ atom_manager! {
 // Window Manager controller
 pub(crate) struct WmCtl
 {
-    pub(crate) xcb: XCBConnection,     // window manager connection
+    pub(crate) xcb: XCBConnection,      // xcb connection
     pub(crate) screen: usize,           // screen number
     pub(crate) root: u32,               // root window id
     pub(crate) width: u16,              // screen width
     pub(crate) height: u16,             // screen height
+    pub(crate) work_width: u16,         // screen height
+    pub(crate) work_height: u16,        // screen height
     pub(crate) atoms: AtomCollection,   // atom cache
 }
-
-// impl Deref for WmCtl
-// {
-// 	type Target = RustConnection;
-
-// 	fn deref(&self) -> &Self::Target {
-// 		&self.conn
-// 	}
-// }
 
 // Connect to the X11 server
 impl WmCtl
 {
     pub(crate) fn connect() -> WmCtlResult<Self> {
-        let (conn, screen) = XCBConnection::connect(None)?;
-        let atoms = AtomCollection::new(&conn)?.reply()?;
+        let (xcb, screen) = XCBConnection::connect(None)?;
+        let atoms = AtomCollection::new(&xcb)?.reply()?;
 
         // Get the screen size
         let (width, height, root) = {
-            let screen = &conn.setup().roots[screen];
+            let screen = &xcb.setup().roots[screen];
             (screen.width_in_pixels, screen.height_in_pixels, screen.root)
         };
 
+        // Create the window manager object
+        let mut wmctl = WmCtl{
+            xcb, screen, root, width, height,
+            work_width: Default::default(),
+            work_height: Default::default(),
+            atoms
+        };
+
+        // Get the work area
+        let (width, height) = wmctl.work_area()?;
+        wmctl.work_width = width;
+        wmctl.work_height = height;
+
         debug!("connect: screen: {}, root: {}, w: {}, h: {}", screen, root, width, height);
-        Ok(Self{xcb: conn, screen, root, width, height, atoms})
+        Ok(wmctl)
     }
 
     /// Get the active window id
     pub(crate) fn active_win(&self) -> WmCtlResult<u32> {
-        let win = 0u32;
-        //let win = ewmh::get_active_window(&self.conn, self.screen).get_reply()?;
-
-        // let reply = conn.get_property(false, root, atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, std::u32::MAX)?.reply()?;
-        // let win = reply.value.first().unwrap();
-        // println!("ACTIVE: {}", win);
-        // let reply = conn.get_property(false, *win as u32, AtomEnum::WM_NAME, AtomEnum::STRING, 0, std::u32::MAX)?.reply()?;
-        // let name = str::from_utf8(&reply.value)?.to_string();
-        // println!("NAME: {}", name);
-
+        let reply = self.xcb.get_property(false, self.root, self.atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
+        let win = match reply.value32().and_then(|mut x| x.next()) {
+            Some(win) => win,
+            None => Err(WmCtlError::ActiveWinNotFound)?,
+        };
         debug!("active_win: {}", win);
         Ok(win)
     }
@@ -118,6 +121,16 @@ impl WmCtl
         Ok(num)
     }
 
+    // Get desktop work area
+    pub(crate) fn work_area(&self) -> WmCtlResult<(u16, u16)> {
+        let reply = self.xcb.get_property(false, self.root, self.atoms._NET_WORKAREA, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        //println!("DataType NET: {:?}", AtomEnum::from(reply.type_ as u8));
+        let mut values = reply.value32().unwrap();
+        let (_, _, w, h) = (values.next(), values.next(), values.next().unwrap(), values.next().unwrap());
+        debug!("work_area: w: {}, h: {}", w, h);
+        Ok((w as u16, h as u16))
+    }
+
     // Get window attribrtes
     pub(crate) fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinState)> {
         let attr = self.xcb.get_window_attributes(win)?.reply()?;
@@ -140,9 +153,17 @@ impl WmCtl
 
     // Get window geometry
     pub(crate) fn win_geometry(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+
+        // XCB's implementation returns invalid results
         let g = self.xcb.get_geometry(win)?.reply()?;
         let (x, y, w, h) = (g.x, g.y, g.width, g.height);
         debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
+
+        // // Xlib seems to given the correct values
+        // let g = self.xlib.get_geometry(win)?.reply()?;
+        // let (x, y, w, h) = (g.x, g.y, g.width, g.height);
+        // debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
+
         Ok((x as i32, y as i32, w as i32, h as i32))
     }
 
@@ -154,7 +175,7 @@ impl WmCtl
         if reply.type_ != x11rb::NONE {
             if let Ok(value) = str::from_utf8(&reply.value) {
                 if value != "" {
-                    trace!("win_name: using _NET_WM_NAME for: {}", value);
+                    debug!("win_name: using _NET_WM_NAME for: {}", value);
                     return Ok(value.to_owned())
                 }
             }
@@ -165,7 +186,7 @@ impl WmCtl
         if reply.type_ != x11rb::NONE {
             if let Ok(value) = str::from_utf8(&reply.value) {
                 if value != "" {
-                    trace!("win_name: using WM_NAME for: {}", value);
+                    debug!("win_name: using WM_NAME for: {}", value);
                     return Ok(value.to_owned())
                 }
             }
@@ -182,25 +203,10 @@ impl WmCtl
             Some(typ) => typ,
             None => Err(WmCtlError::WinTypeNotFound)?,
         };
-        //println!("DataType NET: {:?}", AtomEnum::from(reply.type_ as u8));
-        // if reply.type_ == x11rb::NONE {
-        //     println!("type: NONE");
-        // } else if reply.type_ == AtomEnum::ATOM.into() {
-        //     println!("type: ATOM");
-        // }
-
         let typ = WinType::from(&self.atoms, typ)?;
         debug!("win_type: id: {}, type: {:?}", win, typ);
         Ok(typ)
     }
-
-    // // Get window type
-    // pub(crate) fn win_type(&self, win: xproto::Window) -> WmCtlResult<()> {
-    //     let reply = ewmh::get_wm_window_type(&self.conn, win).get_reply()?;
-    //     let typ = WinType::from(&self.conn, reply)?;
-    //     debug!("win_type: id: {}, type: {}", win, typ);
-    //     Ok(())
-    // }
 
     // // Move and resize window
     // pub(crate) fn move_and_resize(&self, win: xcb::Window, x: i32, y: i32, w: i32, h: i32) -> WmCtlResult<()> {
@@ -291,14 +297,6 @@ impl WmCtl
     //     Ok((l as i32, r as i32, t as i32, b as i32))
     // }
 
-    // Get window geometry
-    // pub(crate) fn win_geometry(&self, win: u32) -> WmCtlResult<(i32, i32, i32, i32)> {
-    //     let g = self.conn.get_geometry(win)?.reply()?;
-    //     let (x, y, w, h) = (g.x, g.y, g.width, g.height);
-    //     debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
-    //     Ok((x as i32, y as i32, w as i32, h as i32))
-    // }
-
     // // Get window pid
     // #[allow(dead_code)]
     // pub(crate) fn win_pid(&self, win: xcb::Window) -> WmCtlResult<u32> {
@@ -315,25 +313,6 @@ impl WmCtl
     //         p.left(), p.right(), p.top(), p.bottom(), p.left_start_y(), p.left_end_y(), p.right_start_y(),
     //         p.right_end_y(), p.top_start_x(), p.top_end_x(), p.bottom_start_x(), p.bottom_end_x());
     //     Ok((p.left() as i32, p.right() as i32, p.top() as i32, p.bottom() as i32))
-    // }
-
-    // Get window name
-    // pub(crate) fn win_name(&self, win: u32) -> WmCtlResult<String> {
-    //     let reply = self.conn.get_property(false, win, AtomEnum::WM_NAME, AtomEnum::STRING, 0, std::u32::MAX)?.reply()?;
-    //     let name = str::from_utf8(&reply.value)?.to_string();
-    //     debug!("win_name: id: {}, name: {}", win, name);
-    //     Ok(name)
-    // }
-/*  */
-    // // Get window type
-    // // 390 = app
-    // // 475 = desktop
-    // // 476 = panel
-    // pub(crate) fn win_type(&self, win: xcb::Window) -> WmCtlResult<u32> {
-    //     let reply = ewmh::get_wm_window_type(&self.conn, win).get_reply()?;
-    //     let typ = *reply.atoms().first().unwrap();
-    //     debug!("win_type: id: {}, type: {}", win, typ);
-    //     Ok(typ)
     // }
 
     // // Remove maximizing attributes
@@ -369,7 +348,7 @@ impl WmCtl
     //     Err(WinError::TaskbarNotFound.into())
     // }
 
-    /// Get all the windows
+    /// Get filtered windows
     /// https://tronche.com/gui/x/xlib/
     /// 
     /// Window Attributes
@@ -382,7 +361,8 @@ impl WmCtl
     /// [(id, name, type, class, state, (x, y, w, h))]
     pub(crate) fn windows(&self) -> WmCtlResult<Vec<(u32, String, WinType, WinClass, WinState, (u32, u32, u32, u32))>> {
         let mut windows = vec![];
-        for win in self.xcb.query_tree(self.root)?.reply()?.children {
+        let tree = self.xcb.query_tree(self.root)?.reply()?;
+        for win in tree.children {
 
             // Filter out windows without a valid window type
             let typ = match self.win_type(win) {
@@ -420,34 +400,60 @@ impl WmCtl
             windows.push((win, name, typ, class, state, (x as u32, y as u32, w as u32, h as u32)));
         }
 
-        // // Setup requests to get all window attributes and geometries
-        // let tree = self.xcb.query_tree(self.root)?.reply()?;
-        // let mut cookies = Vec::with_capacity(tree.children.len());
-        // for win in tree.children {
-        //     //let attr = self.xcb.get_window_attributes(win)?;
-        //     cookies.push((win, attr));
-        // }
+        Ok(windows)
+    }
 
-        // // Now process the replies
-        // for (win, attr, geom) in cookies {
-        //     let (attr, geom) = (attr.reply(), geom.reply());
+    /// Get all the windows
+    /// https://tronche.com/gui/x/xlib/
+    /// 
+    /// Window Attributes
+    /// https://tronche.com/gui/x/xlib/window/attributes/
+    /// 
+    /// * INPUT_OUTPUT windows have a border width of zero or more pixels and share the same root
+    ///   window loaded from screen.root. INPUT_ONLY windows, which are invisible, are used for controlling input
+    /// * INPUT_ONLY windows are invisible and used for controlling input events in situations where an InputOutput
+    ///   window is unnecessary and cannot have INPUT_OUTPUT windows as inferiors.
+    /// [(id, name, type, class, state, (x, y, w, h))]
+    pub(crate) fn all_windows(&self) -> WmCtlResult<Vec<(u32, String, WinType, WinClass, WinState, (u32, u32, u32, u32))>> {
+        let mut windows = vec![];
+        let tree = self.xcb.query_tree(self.root)?.reply()?;
+        for win in tree.children {
 
-        //     // Filter out windows that are not valid
-        //     if attr.is_err() || geom.is_err() {
-        //         continue;
-        //     }
-        //     let (attr, geom) = (attr.unwrap(), geom.unwrap());
+            // Filter out windows without a valid window type
+            let typ = match self.win_type(win) {
+                Ok(typ) => typ,
+                Err(_) => WinType::Invalid,
+            };
 
-        //     let (x, y, w, h) = self.win_geometry(win)?;
+            // Filter out windows that don't have valid sizes
+            // Often windows used for input only or tracking will have odd dimentions like 1x1
+            let (x, y, w, h) = match self.win_geometry(win) {
+                Ok((x, y, w, h)) => {
+                    if w < 1 || h < 1 {
+                        //continue;
+                        (0, 0, 0, 0)
+                    } else {
+                        (x, y, w, h)
+                    }
+                },
+                //Err(_) => continue,
+                Err(_) => (0, 0, 0, 0),
+            };
 
-        //     // xcb name
-        //     let name = self.win_name(win)?;
+            // Use empty string for windows with invalid names
+            let name = match self.win_name(win) {
+                Ok(name) => name,
+                Err(_) => "".to_string(),
+            };
 
-        //     // if format!("{:?}", attr.map_state) == "VIEWABLE" {
-        //     if name != "" {
-        //         debug!("windows: id: {:<9} pos: {:<11} {:<10} {}", win, format!("{}x{}", geom.x, geom.y), format!("{}x{}", geom.width, geom.height), name);
-        //     }
-        // }
+            // Filter out windows that are INPUT_ONLY
+            let (class, state) = self.win_attributes(win)?;
+            // if class == WindowClass::INPUT_ONLY {
+            //     continue;
+            // }
+
+            windows.push((win, name, typ, class, state, (x as u32, y as u32, w as u32, h as u32)));
+        }
 
         Ok(windows)
     }
@@ -475,11 +481,6 @@ impl WmCtl
     //     Ok(self.conn.intern_atom(false, b"_NET_SUPPORTED")?.reply()?.atom)
     // }
 
-    // // Indicates the number of virtual desktops
-    // pub(crate) fn _num_desktops(&self) -> WmCtlResult<xproto::Atom> {
-    //     Ok(self.conn.intern_atom(false, b"_NET_NUMBER_OF_DESKTOPS")?.reply()?.atom)
-    // }
-
     // // Defines the common size of all desktops
     // pub(crate) fn _desktop_geometry(&self) -> WmCtlResult<xproto::Atom> {
     //     Ok(self.conn.intern_atom(false, b"_NET_DESKTOP_GEOMETRY")?.reply()?.atom)
@@ -488,16 +489,6 @@ impl WmCtl
     // // Defines the top left corner of each desktop
     // pub(crate) fn _desktop_viewport(&self) -> WmCtlResult<xproto::Atom> {
     //     Ok(self.conn.intern_atom(false, b"_NET_DESKTOP_VIEWPORT")?.reply()?.atom)
-    // }
-
-    // // Get/set the currently active window
-    // pub(crate) fn _active_win(&self) -> WmCtlResult<xproto::Atom> {
-    //     Ok(self.conn.intern_atom(false, b"_NET_ACTIVE_WINDOW")?.reply()?.atom)
-    // }
-
-    // // Contains a geometry for each desktop
-    // pub(crate) fn _work_area(&self) -> WmCtlResult<xproto::Atom> {
-    //     Ok(self.conn.intern_atom(false, b"_NET_WORKAREA")?.reply()?.atom)
     // }
 
     // // Give the window of the active WM

@@ -20,16 +20,28 @@ pub mod prelude {
 /// Get x11 info
 pub fn info() -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
+    let win = wmctl.active_win()?;
     println!("X11 Information");
     println!("-----------------------------------------------------------------------");
-    println!("Screen Size:       {}x{}", wmctl.width, wmctl.height);
     println!("Root Window:       {}", wmctl.root);
     println!("Composite Manager: {}", wmctl.composite_manager()?);
-    println!("Active Window:     {}", wmctl.active_win()?);
-    //println!("Work area:    {}x{}", wmctl.work_width, wmctl.work_height);
+    println!("Active Window:     {}", win);
+    println!("Work area:         {}x{}", wmctl.work_width, wmctl.work_height);
+    println!("Screen Size:       {}x{}", wmctl.width, wmctl.height);
     println!("Desktops:          {}", wmctl.desktops()?);
     //println!("Taskbar:      {} at {}", wmctl.taskbar_size, wmctl.taskbar);
     println!();
+
+    println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "CLASS", "STATE", "SIZE", "POS", "STRUT", "EXTENTS","NAME");
+    let desktop = 5;
+    let typ = wmctl.win_type(win)?;
+    let (class, state) = wmctl.win_attributes(win)?;
+    let (x, y, w, h) = wmctl.win_geometry(win)?;
+    let name = wmctl.win_name(win)?;
+
+    println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {}", win, desktop, typ.to_string(), class.to_string(), state.to_string(),
+        format!("{},{}", w, h), format!("{},{}", x, y), name);
+
     Ok(())
 }
 
@@ -37,19 +49,11 @@ pub fn info() -> WmCtlResult<()> {
 pub fn list_windows() -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
 
-    // println!("{:<9} {:<11} {:<8} {:<5} {:<10} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "POS", "SIZE", "STRUT", "EXTENTS","NAME");
     println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "CLASS", "STATE", "SIZE", "POS", "STRUT", "EXTENTS","NAME");
-    for (id, name, typ, class, state, (x, y, w, h)) in wmctl.windows()? {
+    for (id, name, typ, class, state, (x, y, w, h)) in wmctl.all_windows()? {
         let desktop = wmctl.win_desktop(id)?;
-    //     let (x, y, w, h) = wmctl.win_geometry(id)?;
-    //     let typ = wmctl.win_type(id)?;
-    //     let (l, r, t, b, lsy, ley, rsy, rey, tsx, tex, bsx, bex) = wmctl.win_reservations(id)?;
-    //     let (el, er, et, eb) = wmctl.win_extents(id)?;
         println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {}", id, desktop, typ.to_string(), class.to_string(), state.to_string(),
-            format!("{}x{}", w, h), format!("{}x{}", x, y), name);
-        //println!("{:<9} {:<8} {:<10} {:<5} {:<10} {:<28} {:<9} {}", id, desktop, typ.to_string(), format!("{}x{}", x, y),
-    //         format!("{}x{}", w, h), format!("{},{},{},{},{},{},{},{},{},{},{},{}", l, r, t, b, lsy, ley, rsy, rey, tsx, tex, bsx, bex),
-    //         format!("{},{},{},{}", el, er, et, eb), name);
+            format!("{},{}", w, h), format!("{},{}", x, y), name);
     }
     Ok(())
 }

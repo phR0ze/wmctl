@@ -6,6 +6,7 @@ pub type WmCtlResult<T> = std::result::Result<T, ErrorWrapper>;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WmCtlError {
+    ActiveWinNotFound,
     InvalidDesktopNum,
     InvalidPosition(String),
     InvalidShape(String),
@@ -21,6 +22,7 @@ impl std::error::Error for WmCtlError {}
 impl fmt::Display for WmCtlError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            WmCtlError::ActiveWinNotFound => write!(f, "active window was not found"),
             WmCtlError::InvalidDesktopNum => write!(f, "invalid desktop number found"),
             WmCtlError::InvalidPosition(ref err) => write!(f, "invalid position was given: {}", err),
             WmCtlError::InvalidShape(ref err) => write!(f, "invalid shape was given: {}", err),
