@@ -42,14 +42,19 @@ winctl info
 "))
  
         // List out all the windows
-        .subcommand(SubCommand::with_name("list").about("List out all windows")
-            .long_about(r"List out all windows
+        .subcommand(SubCommand::with_name("list").about("List out windows")
+            .long_about(r"List out windows
 
 Examples:
 
-# List out all windows
+# List out windows
 winctl list
-"))
+
+# List out all X windows
+winctl list -a
+")
+        .arg(Arg::with_name("all").short("a").long("all").takes_value(false).help("Show all X windows not just WM windows"))
+        )
 
         // Move window to given position
         .subcommand(SubCommand::with_name("move").about("Move the active window")
@@ -116,8 +121,8 @@ winctl shape square
         libwmctl::info().pass()?;
 
     // list
-    } else if let Some(_) = matches.subcommand_matches("list") {
-        libwmctl::list_windows().pass()?;
+    } else if let Some(matches) = matches.subcommand_matches("list") {
+        libwmctl::list(matches.is_present("all")).pass()?;
 
     // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {

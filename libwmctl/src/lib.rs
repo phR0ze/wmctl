@@ -31,28 +31,25 @@ pub fn info() -> WmCtlResult<()> {
     println!("Desktops:          {}", wmctl.desktops()?);
     //println!("Taskbar:      {} at {}", wmctl.taskbar_size, wmctl.taskbar);
     println!();
-
-    println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "CLASS", "STATE", "SIZE", "POS", "STRUT", "EXTENTS","NAME");
-    let desktop = wmctl.win_desktop(win)?;
-    let typ = wmctl.win_type(win)?;
-    let (class, state) = wmctl.win_attributes(win)?;
-    let (x, y, w, h) = wmctl.win_geometry(win)?;
-    let name = wmctl.win_name(win)?;
-
-    println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {}", win, desktop, typ.to_string(), class.to_string(), state.to_string(),
-        format!("{},{}", w, h), format!("{},{}", x, y), name);
-
     Ok(())
 }
 
 /// List out all the current window ids and their titles
-pub fn list_windows() -> WmCtlResult<()> {
+pub fn list(all: bool) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
 
     println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {:<28} {:<9} {}", "ID", "DESKTOP", "TYPE", "CLASS", "STATE", "SIZE", "POS", "STRUT", "EXTENTS","NAME");
-    for (id, name, typ, class, state, (x, y, w, h)) in wmctl.all_windows()? {
-        let desktop = wmctl.win_desktop(id)?;
-        println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {}", id, desktop, typ.to_string(), class.to_string(), state.to_string(),
+    let windows = match all {
+        true => wmctl.all_windows()?,
+        false => wmctl.windows()?,
+    };
+    for win in windows {
+        let desktop = wmctl.win_desktop(win).unwrap_or(-1);
+        let typ = wmctl.win_type(win).unwrap_or(WinType::Invalid);
+        let (class, state) = wmctl.win_attributes(win)?;
+        let (x, y, w, h) = wmctl.win_geometry(win)?;
+        let name = wmctl.win_name(win).unwrap_or("".to_owned());
+        println!("{:<9} {:<8} {:<10} {:<12} {:<9} {:<10} {:<22} {}", win, desktop, typ.to_string(), class.to_string(), state.to_string(),
             format!("{},{}", w, h), format!("{},{}", x, y), name);
     }
     Ok(())
