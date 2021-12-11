@@ -20,11 +20,13 @@ pub mod prelude {
 /// Get x11 info
 pub fn info() -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
+    let (_, wm_name) = wmctl.winmgr()?;
     let win = wmctl.active_win()?;
     println!("X11 Information");
     println!("-----------------------------------------------------------------------");
-    println!("Root Window:       {}", wmctl.root);
+    println!("Window Manager:    {}", wm_name);
     println!("Composite Manager: {}", wmctl.composite_manager()?);
+    println!("Root Window:       {}", wmctl.root);
     println!("Work area:         {}x{}", wmctl.work_width, wmctl.work_height);
     println!("Screen Size:       {}x{}", wmctl.width, wmctl.height);
     println!("Desktops:          {}", wmctl.desktops()?);

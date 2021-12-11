@@ -22,7 +22,7 @@
         {
             "label": "Run",
             "type": "shell",
-            "command": "cargo run -- list"
+            "command": "cargo run -- -d info"
         }
     ]
 }

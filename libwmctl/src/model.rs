@@ -319,3 +319,179 @@ impl fmt::Display for WinType {
         }
     }
 }
+
+// Simple brute force conversion of an atom to string
+pub(crate) fn atom_to_string(atoms: &AtomCollection, val: u32) -> WmCtlResult<String> { 
+    let property = if val == atoms._NET_ACTIVE_WINDOW {
+        "_NET_ACTIVE_WINDOW"
+    } else if val == atoms._NET_CLIENT_LIST {
+        "_NET_CLIENT_LIST"
+    } else if val == atoms._NET_CLIENT_LIST_STACKING {
+        "_NET_CLIENT_LIST_STACKING"
+    } else if val == atoms._NET_CURRENT_DESKTOP {
+         "_NET_CURRENT_DESKTOP"
+    } else if val == atoms._NET_CLOSE_WINDOW {
+         "_NET_CLOSE_WINDOW"
+    } else if val == atoms._NET_DESKTOP_GEOMETRY {
+         "_NET_DESKTOP_GEOMETRY"
+    } else if val == atoms._NET_DESKTOP_LAYOUT {
+         "_NET_DESKTOP_LAYOUT"
+    } else if val == atoms._NET_DESKTOP_NAMES {
+         "_NET_DESKTOP_NAMES"
+    } else if val == atoms._NET_DESKTOP_VIEWPORT {
+         "_NET_DESKTOP_VIEWPORT"
+    } else if val == atoms._NET_FRAME_EXTENTS {
+        "_NET_FRAME_EXTENTS"
+    } else if val == atoms._NET_MOVERESIZE_WINDOW {
+         "_NET_MOVERESIZE_WINDOW"
+    } else if val == atoms._NET_NUMBER_OF_DESKTOPS {
+        "_NET_NUMBER_OF_DESKTOPS"
+    } else if val == atoms._NET_REQUEST_FRAME_EXTENTS {
+         "_NET_REQUEST_FRAME_EXTENTS"
+    } else if val == atoms._NET_SHOWING_DESKTOP {
+         "_NET_SHOWING_DESKTOP"
+    } else if val == atoms._NET_SUPPORTED {
+        "_NET_SUPPORTED"
+    } else if val == atoms._NET_SUPPORTING_WM_CHECK {
+        "_NET_SUPPORTING_WM_CHECK"
+    } else if val == atoms._NET_SYSTEM_TRAY_OPCODE {
+         "_NET_SYSTEM_TRAY_OPCODE"
+    } else if val == atoms._NET_WM_ACTION_ABOVE {
+         "_NET_WM_ACTION_ABOVE"
+    } else if val == atoms._NET_WM_ACTION_BELOW {
+         "_NET_WM_ACTION_BELOW"
+    } else if val == atoms._NET_WM_ACTION_CHANGE_DESKTOP {
+         "_NET_WM_ACTION_CHANGE_DESKTOP"
+    } else if val == atoms._NET_WM_ACTION_CLOSE {
+         "_NET_WM_ACTION_CLOSE"
+    } else if val == atoms._NET_WM_ACTION_FULLSCREEN {
+         "_NET_WM_ACTION_FULLSCREEN"
+    } else if val == atoms._NET_WM_ACTION_MAXIMIZE_HORZ {
+         "_NET_WM_ACTION_MAXIMIZE_HORZ"
+    } else if val == atoms._NET_WM_ACTION_MAXIMIZE_VERT {
+         "_NET_WM_ACTION_MAXIMIZE_VERT"
+    } else if val == atoms._NET_WM_ACTION_MINIMIZE {
+         "_NET_WM_ACTION_MINIMIZE"
+    } else if val == atoms._NET_WM_ACTION_MOVE {
+         "_NET_WM_ACTION_MOVE"
+    } else if val == atoms._NET_WM_ACTION_RESIZE {
+         "_NET_WM_ACTION_RESIZE"
+    } else if val == atoms._NET_WM_ACTION_SHADE {
+         "_NET_WM_ACTION_SHADE"
+    } else if val == atoms._NET_WM_ACTION_STICK {
+         "_NET_WM_ACTION_STICK"
+    } else if val == atoms._NET_WM_ALLOWED_ACTIONS {
+         "_NET_WM_ALLOWED_ACTIONS"
+    } else if val == atoms._NET_WM_BYPASS_COMPOSITOR {
+         "_NET_WM_BYPASS_COMPOSITOR"
+    } else if val == atoms._NET_WM_CONTEXT_HELP {
+        "_NET_WM_CONTEXT_HELP"
+    } else if val == atoms._NET_WM_DESKTOP {
+        "_NET_WM_DESKTOP"
+    } else if val == atoms._NET_WM_FULLSCREEN_MONITORS {
+         "_NET_WM_FULLSCREEN_MONITORS"
+    } else if val == atoms._NET_WM_HANDLED_ICONS {
+         "_NET_WM_HANDLED_ICONS"
+    } else if val == atoms._NET_WM_ICON {
+         "_NET_WM_ICON"
+    } else if val == atoms._NET_WM_ICON_GEOMETRY {
+         "_NET_WM_ICON_GEOMETRY"
+    } else if val == atoms._NET_WM_ICON_NAME {
+         "_NET_WM_ICON_NAME"
+    } else if val == atoms._NET_WM_NAME {
+        "_NET_WM_NAME"
+    } else if val == atoms._NET_WM_OPAQUE_REGION {
+         "_NET_WM_OPAQUE_REGION"
+    } else if val == atoms._NET_WM_PID {
+        "_NET_WM_PID"
+    } else if val == atoms._NET_WM_PING {
+         "_NET_WM_PING"
+    } else if val == atoms._NET_WM_WINDOW_OPACITY {
+        "_NET_WM_WINDOW_OPACITY"
+    } else if val == atoms._NET_WM_WINDOW_OPACITY_LOCKED {
+        "_NET_WM_WINDOW_OPACITY_LOCKED"
+    } else if val == atoms._NET_WM_STATE {
+        "_NET_WM_STATE"
+    } else if val == atoms._NET_WM_STATE_ABOVE {
+        "_NET_WM_STATE_ABOVE"
+    } else if val == atoms._NET_WM_STATE_BELOW {
+        "_NET_WM_STATE_BELOW"
+    } else if val == atoms._NET_WM_STATE_DEMANDS_ATTENTION {
+        "_NET_WM_STATE_DEMANDS_ATTENTION"
+    } else if val == atoms._NET_WM_STATE_FOCUSED {
+        "_NET_WM_STATE_FOCUSED"
+    } else if val == atoms._NET_WM_STATE_FULLSCREEN {
+        "_NET_WM_STATE_FULLSCREEN"
+    } else if val == atoms._NET_WM_MOVERESIZE {
+         "_NET_WM_MOVERESIZE"
+    } else if val == atoms._NET_WM_STATE_HIDDEN {
+        "_NET_WM_STATE_HIDDEN"
+    } else if val == atoms._NET_WM_STATE_MAXIMIZED_VERT {
+        "_NET_WM_STATE_MAXIMIZED_VERT"
+    } else if val == atoms._NET_WM_STATE_MAXIMIZED_HORZ {
+        "_NET_WM_STATE_MAXIMIZED_HORZ"
+    } else if val == atoms._NET_WM_STATE_MODAL {
+        "_NET_WM_STATE_MODAL"
+    } else if val == atoms._NET_WM_STATE_SHADED {
+        "_NET_WM_STATE_SHADED"
+    } else if val == atoms._NET_WM_STATE_SKIP_PAGER {
+        "_NET_WM_STATE_SKIP_PAGER"
+    } else if val == atoms._NET_WM_STATE_SKIP_TASKBAR {
+        "_NET_WM_STATE_SKIP_TASKBAR"
+    } else if val == atoms._NET_WM_STATE_STICKY {
+        "_NET_WM_STATE_STICKY"
+    } else if val == atoms._NET_WM_STRUT {
+        "_NET_WM_STRUT"
+    } else if val == atoms._NET_WM_STRUT_PARTIAL {
+        "_NET_WM_STRUT_PARTIAL"
+    } else if val == atoms._NET_WM_SYNC_REQUEST {
+        "_NET_WM_SYNC_REQUEST"
+    } else if val == atoms._NET_WM_SYNC_REQUEST_COUNTER {
+        "_NET_WM_SYNC_REQUEST_COUNTER"
+    } else if val == atoms._NET_WM_USER_TIME {
+         "_NET_WM_USER_TIME"
+    } else if val == atoms._NET_WM_USER_TIME_WINDOW {
+         "_NET_WM_USER_TIME_WINDOW"
+    } else if val == atoms._NET_WM_VISIBLE_ICON_NAME {
+        "_NET_WM_VISIBLE_ICON_NAME"
+    } else if val == atoms._NET_WM_VISIBLE_NAME {
+        "_NET_WM_VISIBLE_NAME"
+    } else if val == atoms._NET_WM_WINDOW_TYPE {
+        "_NET_WM_WINDOW_TYPE"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_COMBO {
+        "_NET_WM_WINDOW_TYPE_COMBO"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_DESKTOP {
+        "_NET_WM_WINDOW_TYPE_DESKTOP"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_DIALOG {
+        "_NET_WM_WINDOW_TYPE_DIALOG"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_DND {
+        "_NET_WM_WINDOW_TYPE_DND"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_DOCK {
+        "_NET_WM_WINDOW_TYPE_DOCK"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_DROPDOWN_MENU {
+        "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_MENU {
+        "_NET_WM_WINDOW_TYPE_MENU"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_NORMAL {
+        "_NET_WM_WINDOW_TYPE_NORMAL"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_NOTIFICATION {
+        "_NET_WM_WINDOW_TYPE_NOTIFICATION"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_POPUP_MENU {
+        "_NET_WM_WINDOW_TYPE_POPUP_MENU"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_SPLASH {
+        "_NET_WM_WINDOW_TYPE_SPLASH"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_TOOLBAR {
+        "_NET_WM_WINDOW_TYPE_TOOLBAR"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_TOOLTIP {
+        "_NET_WM_WINDOW_TYPE_TOOLTIP"
+    } else if val == atoms._NET_WM_WINDOW_TYPE_UTILITY {
+        "_NET_WM_WINDOW_TYPE_UTILITY"
+    } else if val == atoms._NET_WORKAREA {
+        "_NET_WORKAREA"
+    } else if val == atoms.UTF8_STRING {
+        "UTF8_STRING"
+    } else {
+        return Ok(val.to_string())
+    };
+    Ok(property.to_owned())
+}

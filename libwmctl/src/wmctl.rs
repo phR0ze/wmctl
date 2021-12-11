@@ -9,7 +9,7 @@
 //
 // The EWMH spec defines a number of properties that EWHM compliant window managers will maintain
 // and return to clients requesting information.
-use crate::{WmCtlResult, WinPosition, WmCtlError, WinClass, WinMap, WinState, WinType};
+use crate::{WmCtlResult, model::*, WmCtlError, WinClass, WinMap, WinState, WinType};
 use std::{str, ops::Deref};
 use tracing::{trace, debug};
 
@@ -27,12 +27,49 @@ atom_manager! {
     pub(crate) AtomCollection: AtomCollectionCookie {
         _NET_ACTIVE_WINDOW,
         _NET_CLIENT_LIST,
+        _NET_CLIENT_LIST_STACKING,
+        _NET_CLOSE_WINDOW,
+        _NET_CURRENT_DESKTOP,
+        _NET_DESKTOP_GEOMETRY,
+        _NET_DESKTOP_LAYOUT,
+        _NET_DESKTOP_NAMES,
+        _NET_DESKTOP_VIEWPORT,
         _NET_FRAME_EXTENTS,
+        _NET_MOVERESIZE_WINDOW,
         _NET_NUMBER_OF_DESKTOPS,
-        _NET_WORKAREA,
+        _NET_REQUEST_FRAME_EXTENTS,
+        _NET_SHOWING_DESKTOP,
+        _NET_SUPPORTED,
+        _NET_SUPPORTING_WM_CHECK,
+        _NET_SYSTEM_TRAY_OPCODE,
+        _NET_WM_ACTION_ABOVE,
+        _NET_WM_ACTION_BELOW,
+        _NET_WM_ACTION_CHANGE_DESKTOP,
+        _NET_WM_ACTION_CLOSE,
+        _NET_WM_ACTION_FULLSCREEN,
+        _NET_WM_ACTION_MAXIMIZE_HORZ,
+        _NET_WM_ACTION_MAXIMIZE_VERT,
+        _NET_WM_ACTION_MINIMIZE,
+        _NET_WM_ACTION_MOVE,
+        _NET_WM_ACTION_RESIZE,
+        _NET_WM_ACTION_SHADE,
+        _NET_WM_ACTION_STICK,
+        _NET_WM_ALLOWED_ACTIONS,
+        _NET_WM_BYPASS_COMPOSITOR,
+        _NET_WM_CONTEXT_HELP,
         _NET_WM_DESKTOP,
+        _NET_WM_FULLSCREEN_MONITORS,
+        _NET_WM_HANDLED_ICONS,
+        _NET_WM_ICON,
+        _NET_WM_ICON_GEOMETRY,
+        _NET_WM_ICON_NAME,
+        _NET_WM_MOVERESIZE,
         _NET_WM_NAME,
+        _NET_WM_OPAQUE_REGION,
         _NET_WM_PID,
+        _NET_WM_PING,
+        _NET_WM_WINDOW_OPACITY,
+        _NET_WM_WINDOW_OPACITY_LOCKED,
         _NET_WM_STATE,
         _NET_WM_STATE_ABOVE,
         _NET_WM_STATE_BELOW,
@@ -47,7 +84,14 @@ atom_manager! {
         _NET_WM_STATE_SKIP_PAGER,
         _NET_WM_STATE_SKIP_TASKBAR,
         _NET_WM_STATE_STICKY,
+        _NET_WM_STRUT,
+        _NET_WM_STRUT_PARTIAL,
+        _NET_WM_SYNC_REQUEST,
+        _NET_WM_SYNC_REQUEST_COUNTER,
+        _NET_WM_USER_TIME,
+        _NET_WM_USER_TIME_WINDOW,
         _NET_WM_VISIBLE_NAME,
+        _NET_WM_VISIBLE_ICON_NAME,
         _NET_WM_WINDOW_TYPE,
         _NET_WM_WINDOW_TYPE_COMBO,
         _NET_WM_WINDOW_TYPE_DESKTOP,
@@ -63,6 +107,7 @@ atom_manager! {
         _NET_WM_WINDOW_TYPE_TOOLBAR,
         _NET_WM_WINDOW_TYPE_TOOLTIP,
         _NET_WM_WINDOW_TYPE_UTILITY,
+        _NET_WORKAREA,
         UTF8_STRING,
     }
 }
@@ -110,7 +155,7 @@ impl WmCtl
         };
 
         // Get the work area
-        let (width, height) = wmctl.work_area()?;
+        let (width, height) = wmctl.workarea()?;
         wmctl.work_width = width;
         wmctl.work_height = height;
 
@@ -155,17 +200,41 @@ impl WmCtl
         Ok(num)
     }
 
+    // Get supported window manager messages
+    // Defined as: _NET_SUPPOTED, ATOM[]/32
+    #[allow(dead_code)]
+    pub(crate) fn supported(&self) -> WmCtlResult<()> {
+        let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+        for atom in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
+            debug!("supported: {}", atom_to_string(&self.atoms, atom)?);
+        }
+        Ok(())
+    }
+
+    // Get window manager's window id and name
+    pub(crate) fn winmgr(&self) -> WmCtlResult<(u32, String)> {
+        let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
+        let win = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTING_WM_CHECK".to_owned()))?;
+        let name = self.win_name(win)?;
+        debug!("winmgr: id: {}, name: {}", win, name);
+        Ok((win, name))
+    }
+
     // Get desktop work area
     // Defined as: _NET_WORKAREA, x, y, width, height CARDINAL[][4]/32
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WORKAREA`
     // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
     // retrieve the values of which there will be 4 for each desktop as defined (x, y, width, height).
-    pub(crate) fn work_area(&self) -> WmCtlResult<(u16, u16)> {
+    pub(crate) fn workarea(&self) -> WmCtlResult<(u16, u16)> {
         let reply = self.get_property(false, self.root, self.atoms._NET_WORKAREA, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
-        let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA".to_owned()))?.skip(2);
+        let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA".to_owned()))?;
+        let x = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA x".to_owned()))?;
+        let y = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA y".to_owned()))?;
         let w = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA width".to_owned()))?;
         let h = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA height".to_owned()))?;
-        debug!("work_area: w: {}, h: {}", w, h);
+        debug!("work_area: x: {}, y: {}, w: {}, h: {}", x, y, w, h);
+
+        // x and y are always zero so dropping them
         Ok((w as u16, h as u16))
     }
 
