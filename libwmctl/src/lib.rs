@@ -34,7 +34,30 @@ pub fn info() -> WmCtlResult<()> {
     println!();
     println!("Active Window");
     println!("{:-<120}", "");
-    println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", "ID", "PID", "DESKTOP", "TYPE", "CLASS", "MAP", "STATE", "SIZE", "POS", "BORDERS", "NAME");
+    print_win_header();
+    print_win_details(&wmctl, win)?;
+    Ok(())
+}
+
+/// List out all the current window ids and their titles
+pub fn list(all: bool) -> WmCtlResult<()> {
+    let wmctl = WmCtl::connect()?;
+    print_win_header();
+    let windows = match all {
+        true => wmctl.all_windows()?,
+        false => wmctl.windows()?,
+    };
+    for win in windows {
+        print_win_details(&wmctl, win)?;
+    }
+    Ok(())
+}
+
+fn print_win_header() {
+    println!("{:<8} {:<3} {:<6} {:<4} {:<4} {:<4} {:<4} {:<9} {:<20} {:<10} {:<11} {:<9} {}", "ID", "DSK", "PID", "X", "Y", "W", "H", "TYPE", "CLASS", "MAP", "STATE", "BORDERS", "NAME");
+}
+
+fn print_win_details(wmctl: &WmCtl, win: u32) -> WmCtlResult<()> {
     let pid = wmctl.win_pid(win).unwrap_or(-1);
     let desktop = wmctl.win_desktop(win).unwrap_or(-1);
     let typ = wmctl.win_type(win).unwrap_or(WinType::Invalid);
@@ -43,37 +66,11 @@ pub fn info() -> WmCtlResult<()> {
     let (x, y, w, h) = wmctl.win_geometry(win)?;
     let (l, r, t, b) = wmctl.win_borders(win).unwrap_or((0, 0, 0, 0));
     let name = wmctl.win_name(win).unwrap_or("".to_owned());
-    println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", win, pid, desktop,
+    println!("{:<8} {:<3} {:<6} {:<4} {:<4} {:<4} {:<4} {:<9} {:<20} {:<10} {:<11} {:<9} {}",
+        format!("{:0>8}", win), format!("{:>2}", desktop), pid,
+        format!("{:<4}", x), format!("{:<4}", y), format!("{:<4}", w), format!("{:<4}", h), 
         typ.to_string(), class.to_string(), map.to_string(), format!("{:?}", states),
-        format!("{},{}", w, h), format!("{},{}", x, y), format!("{},{},{},{}", l, r, t, b), name);
-
-    Ok(())
-}
-
-/// List out all the current window ids and their titles
-pub fn list(all: bool) -> WmCtlResult<()> {
-    let wmctl = WmCtl::connect()?;
-
-    println!("{:<10} {:<3} {:<6} {:<4} {:<4} {:<4} {:<4} {:<9} {:<20} {:<10} {:<11} {:<9} {}", "ID", "DSK", "PID", "X", "Y", "W", "H", "TYPE", "CLASS", "MAP", "STATE", "BORDERS", "NAME");
-    let windows = match all {
-        true => wmctl.all_windows()?,
-        false => wmctl.windows()?,
-    };
-    for win in windows {
-        let pid = wmctl.win_pid(win).unwrap_or(-1);
-        let desktop = wmctl.win_desktop(win).unwrap_or(-1);
-        let typ = wmctl.win_type(win).unwrap_or(WinType::Invalid);
-        let (class, map) = wmctl.win_attributes(win)?;
-        let states = wmctl.win_state(win).unwrap_or(vec![WinState::Invalid]);
-        let (x, y, w, h) = wmctl.win_geometry(win)?;
-        let (l, r, t, b) = wmctl.win_borders(win).unwrap_or((0, 0, 0, 0));
-        let name = wmctl.win_name(win).unwrap_or("".to_owned());
-        println!("{:<9} {:<3} {:<6} {:<4} {:<4} {:<4} {:<4} {:<9} {:<20} {:<10} {:<11} {:<9} {}",
-            format!("0x{:0>8x}", win), format!("{:>2}", desktop), pid,
-            format!("{:<4}", x), format!("{:<4}", y), format!("{:<4}", w), format!("{:<4}", y), 
-            typ.to_string(), class.to_string(), map.to_string(), format!("{:?}", states),
-            format!("{},{},{},{}", l, r, t, b), name);
-    }
+        format!("{},{},{},{}", l, r, t, b), name);
     Ok(())
 }
 

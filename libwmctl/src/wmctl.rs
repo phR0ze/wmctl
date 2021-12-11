@@ -138,7 +138,6 @@ impl WmCtl
 {
     pub(crate) fn connect() -> WmCtlResult<Self> {
         let (conn, screen) = x11rb::connect(None)?;
-        let atoms = AtomCollection::new(&conn)?.reply()?;
 
         // Get the screen size
         let (width, height, root) = {
@@ -146,17 +145,16 @@ impl WmCtl
             (screen.width_in_pixels, screen.height_in_pixels, screen.root)
         };
 
+        // Populate the supported functions cache
+        let (atoms, supported) = WmCtl::init_caching(&conn, root)?;
+
         // Create the window manager object
         let mut wmctl = WmCtl{
-            conn, atoms,
-            supported: HashMap::<u32, String>::new(),
+            conn, atoms, supported,
             screen, root, width, height,
             work_width: Default::default(),
             work_height: Default::default(),
         };
-
-        // Populate the supported functions cache
-        wmctl.populate_supported_functions_cache()?;
 
         // Get the work area
         let (width, height) = wmctl.workarea()?;
@@ -167,15 +165,23 @@ impl WmCtl
         Ok(wmctl)
     }
 
-    fn populate_supported_functions_cache(&mut self) -> WmCtlResult<()> {
-        let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+    fn init_caching(conn: &RustConnection, root: u32) -> WmCtlResult<(AtomCollection, HashMap<u32, String>)> {
+        debug!("initializing caching...");
+
+        // Cache atoms
+        let atoms = AtomCollection::new(conn)?.reply()?;
+
+        // Cache supported functions
+        let mut supported = HashMap::<u32, String>::new();
+        let reply = conn.get_property(false, root, atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
         for atom in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
-            if let Ok(name) = atom_to_string(&self.atoms, atom) {
-                trace!("supported: {}", atom_to_string(&self.atoms, atom)?);
-                self.supported.insert(atom, name);
+            if let Ok(name) = atom_to_string(&atoms, atom) {
+                trace!("supported: {}", atom_to_string(&atoms, atom)?);
+                supported.insert(atom, name);
             }
         }
-        Ok(())
+        debug!("caching initialized");
+        Ok((atoms, supported))
     }
 
     // Get the active window id
@@ -217,6 +223,7 @@ impl WmCtl
 
     // Determine if the given function is supported by the window manager
     // Defined as: _NET_SUPPOTED, ATOM[]/32
+    #[allow(dead_code)]
     pub(crate) fn supported(&self, atom: u32) -> bool {
         self.supported.get(&atom).is_some()
     }
@@ -285,8 +292,18 @@ impl WmCtl
 
     // Get window geometry
     pub(crate) fn win_geometry(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+
+        // The returned x, y location is relative to its parent window making the values completely
+        // useless. However using `translate_coordinates` we can have the window manager map those
+        // useless values into real world cordinates by passing it the root as the relative window.
+
+        // Get width and heith and useless relative location values
         let g = self.get_geometry(win)?.reply()?;
-        let (x, y, w, h) = (g.x, g.y, g.width, g.height);
+
+        // Translate the useless retative location values to to real world values
+        let t = self.translate_coordinates(win, self.root, g.x, g.y)?.reply()?;
+
+        let (x, y, w, h) = (t.dst_x, t.dst_y, g.width, g.height);
         debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
         Ok((x as i32, y as i32, w as i32, h as i32))
     }
@@ -333,6 +350,15 @@ impl WmCtl
 
         // No valid name was found
         Err(WmCtlError::PropertyNotFound("_NET_WM_NAME | _WM_NAME".to_owned()).into())
+    }
+
+    // Get window parent
+    #[allow(dead_code)]
+    pub(crate) fn win_parent(&self, win: xproto::Window) -> WmCtlResult<u32> {
+        let tree = self.query_tree(win)?.reply()?;
+        let id = tree.parent;
+        debug!("win_parent: id: {}, parent: {:?}", win, id);
+        Ok(id)
     }
 
     // Get window pid
