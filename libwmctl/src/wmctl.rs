@@ -108,6 +108,7 @@ atom_manager! {
         _NET_WM_WINDOW_TYPE_UTILITY,
         _NET_WORKAREA,
         UTF8_STRING,
+        WM_CLASS,
     }
 }
 
@@ -228,6 +229,26 @@ impl WmCtl
         self.supported.get(&atom).is_some()
     }
 
+    // Get windows optionally all
+    pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>> {
+        let mut windows = vec![];
+        if all {
+            // All windows in the X11 system
+            let tree = self.query_tree(self.root)?.reply()?;
+            for win in tree.children {
+                windows.push(win);
+            }
+        } else {
+            // Window manager client windows which is a subset of all windows that have been
+            // reparented i.e. new ids and don't map to the same ids as their all windows selves.
+            let reply = self.get_property(false, self.root, self.atoms._NET_CLIENT_LIST, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
+            for win in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_CLIENT_LIST".to_owned()))? {
+                windows.push(win)
+            }
+        }
+        Ok(windows)
+    }
+
     // Get window manager's window id and name
     pub(crate) fn winmgr(&self) -> WmCtlResult<(u32, String)> {
         let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
@@ -262,6 +283,19 @@ impl WmCtl
         Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
     }
 
+    // Get window class which ends up being the applications name
+    pub(crate) fn win_class(&self, win: xproto::Window) -> WmCtlResult<String> {
+        let reply = self.get_property(false, win, self.atoms.WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
+
+        // Skip the first null terminated string
+        let iter = reply.value.into_iter().skip_while(|x| *x != 0).skip(1);
+
+        // Extract the second null terminated string
+        let class = str::from_utf8(&iter.take_while(|x| *x != 0).collect::<Vec<_>>())?.to_owned();
+        debug!("win_class: id: {}, class: {}", win, class);
+        Ok(class)
+    }
+
     // Get window desktop
     // Defined as: _NET_WM_DESKTOP desktop, CARDINAL/32
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_DESKTOP`
@@ -291,7 +325,7 @@ impl WmCtl
     }
 
     // Get window geometry
-    pub(crate) fn win_geometry(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+    pub(crate) fn win_geometry(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, u32, u32)> {
 
         // The returned x, y location is relative to its parent window making the values completely
         // useless. However using `translate_coordinates` we can have the window manager map those
@@ -305,7 +339,7 @@ impl WmCtl
 
         let (x, y, w, h) = (t.dst_x, t.dst_y, g.width, g.height);
         debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
-        Ok((x as i32, y as i32, w as i32, h as i32))
+        Ok((x as i32, y as i32, w as u32, h as u32))
     }
 
     // Get window name
@@ -400,75 +434,6 @@ impl WmCtl
         let typ = WinType::from(&self.atoms, typ)?;
         debug!("win_type: id: {}, type: {:?}", win, typ);
         Ok(typ)
-    }
-
-    // Get client windows
-    // Defined as: _NET_CLIENT_LIST, WINDOW[]/32 
-    // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_CLIENT_LIST`
-    // request message with a `AtomEnum::WINDOW` type response and we can use the `reply.value32()` accessor to
-    // retrieve the values
-    pub(crate) fn windows(&self) -> WmCtlResult<Vec<u32>> {
-        let mut windows = vec![];
-        let reply = self.get_property(false, self.root, self.atoms._NET_CLIENT_LIST, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
-        for win in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_CLIENT_LIST".to_owned()))? {
-            windows.push(win)
-        }
-        Ok(windows)
-    }
-
-    /// Get all X windows
-    /// https://tronche.com/gui/x/xlib/
-    /// 
-    /// Window Attributes
-    /// https://tronche.com/gui/x/xlib/window/attributes/
-    /// 
-    /// * INPUT_OUTPUT windows have a border width of zero or more pixels and share the same root
-    ///   window loaded from screen.root. INPUT_ONLY windows, which are invisible, are used for controlling input
-    /// * INPUT_ONLY windows are invisible and used for controlling input events in situations where an InputOutput
-    ///   window is unnecessary and cannot have INPUT_OUTPUT windows as inferiors.
-    pub(crate) fn all_windows(&self) -> WmCtlResult<Vec<u32>> {
-        let mut windows = vec![];
-        let tree = self.query_tree(self.root)?.reply()?;
-        for win in tree.children {
-
-            // // Filter out windows without a valid window type
-            // let typ = match self.win_type(win) {
-            //     Ok(typ) => typ,
-            //     Err(_) => WinType::Invalid,
-            // };
-
-            // // Filter out windows that don't have valid sizes
-            // // Often windows used for input only or tracking will have odd dimentions like 1x1
-            // let (x, y, w, h) = match self.win_geometry(win) {
-            //     Ok((x, y, w, h)) => {
-            //         if w < 1 || h < 1 {
-            //             //continue;
-            //             (0, 0, 0, 0)
-            //         } else {
-            //             (x, y, w, h)
-            //         }
-            //     },
-            //     //Err(_) => continue,
-            //     Err(_) => (0, 0, 0, 0),
-            // };
-
-            // // Use empty string for windows with invalid names
-            // let name = match self.win_name(win) {
-            //     Ok(name) => name,
-            //     Err(_) => "".to_owned(),
-            // };
-
-            // // Filter out windows that are INPUT_ONLY
-            // let (class, state) = self.win_attributes(win)?;
-            // // if class == WindowClass::INPUT_ONLY {
-            // //     continue;
-            // // }
-
-            // windows.push((win, name, typ, class, state, (x as u32, y as u32, w as u32, h as u32)));
-            windows.push(win);
-        }
-
-        Ok(windows)
     }
 
     // Helper method to print out the data type
