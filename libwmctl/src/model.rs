@@ -491,7 +491,7 @@ pub(crate) fn atom_to_string(atoms: &AtomCollection, val: u32) -> WmCtlResult<St
     } else if val == atoms.UTF8_STRING {
         "UTF8_STRING"
     } else {
-        return Ok(val.to_string())
+        Err(WmCtlError::InvalidAtom(val.to_string()))?
     };
     Ok(property.to_owned())
 }

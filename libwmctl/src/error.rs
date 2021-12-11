@@ -6,6 +6,7 @@ pub type WmCtlResult<T> = std::result::Result<T, ErrorWrapper>;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WmCtlError {
+    InvalidAtom(String),
     InvalidPosition(String),
     InvalidShape(String),
     InvalidWinClass(u32),
@@ -20,6 +21,7 @@ impl std::error::Error for WmCtlError {}
 impl fmt::Display for WmCtlError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            WmCtlError::InvalidAtom(ref err) => write!(f, "invalid atom was given: {}", err),
             WmCtlError::InvalidPosition(ref err) => write!(f, "invalid position was given: {}", err),
             WmCtlError::InvalidShape(ref err) => write!(f, "invalid shape was given: {}", err),
             WmCtlError::InvalidWinClass(ref err) => write!(f, "invalid class was given: {}", err),

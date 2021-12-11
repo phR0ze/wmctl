@@ -54,7 +54,7 @@ pub fn info() -> WmCtlResult<()> {
 pub fn list(all: bool) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
 
-    println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", "ID", "PID", "DESKTOP", "TYPE", "CLASS", "MAP", "STATE", "SIZE", "POS", "BORDERS", "NAME");
+    println!("{:<10} {:<3} {:<6} {:<4} {:<4} {:<4} {:<4} {:<9} {:<20} {:<10} {:<11} {:<9} {}", "ID", "DSK", "PID", "X", "Y", "W", "H", "TYPE", "CLASS", "MAP", "STATE", "BORDERS", "NAME");
     let windows = match all {
         true => wmctl.all_windows()?,
         false => wmctl.windows()?,
@@ -68,9 +68,11 @@ pub fn list(all: bool) -> WmCtlResult<()> {
         let (x, y, w, h) = wmctl.win_geometry(win)?;
         let (l, r, t, b) = wmctl.win_borders(win).unwrap_or((0, 0, 0, 0));
         let name = wmctl.win_name(win).unwrap_or("".to_owned());
-        println!("{:<9} {:<9} {:<8} {:<10} {:<12} {:<9} {:<20} {:<10} {:<11} {:<9} {}", win, pid, desktop,
+        println!("{:<9} {:<3} {:<6} {:<4} {:<4} {:<4} {:<4} {:<9} {:<20} {:<10} {:<11} {:<9} {}",
+            format!("0x{:0>8x}", win), format!("{:>2}", desktop), pid,
+            format!("{:<4}", x), format!("{:<4}", y), format!("{:<4}", w), format!("{:<4}", y), 
             typ.to_string(), class.to_string(), map.to_string(), format!("{:?}", states),
-            format!("{},{}", w, h), format!("{},{}", x, y), format!("{},{},{},{}", l, r, t, b), name);
+            format!("{},{},{},{}", l, r, t, b), name);
     }
     Ok(())
 }

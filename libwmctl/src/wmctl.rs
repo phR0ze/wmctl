@@ -10,7 +10,7 @@
 // The EWMH spec defines a number of properties that EWHM compliant window managers will maintain
 // and return to clients requesting information.
 use crate::{WmCtlResult, model::*, WmCtlError, WinClass, WinMap, WinState, WinType};
-use std::{str, ops::Deref};
+use std::{str, ops::Deref, collections::HashMap};
 use tracing::{trace, debug};
 
 use x11rb::{
@@ -18,7 +18,6 @@ use x11rb::{
     connection::Connection,
     protocol::xproto::{ConnectionExt as _, self, *},
     wrapper::ConnectionExt as _,
-    //xcb_ffi::XCBConnection,
     rust_connection::RustConnection,
 };
 
@@ -116,14 +115,15 @@ atom_manager! {
 // through the x11 libraries.
 pub(crate) struct WmCtl
 {
-    pub(crate) conn: RustConnection,     // x11 connection
+    conn: RustConnection,               // x11 connection
+    atoms: AtomCollection,              // atom cache
+    supported: HashMap<u32, String>,    // cache for supported functions
     pub(crate) screen: usize,           // screen number
     pub(crate) root: u32,               // root window id
     pub(crate) width: u16,              // screen width
     pub(crate) height: u16,             // screen height
     pub(crate) work_width: u16,         // screen height
     pub(crate) work_height: u16,        // screen height
-    pub(crate) atoms: AtomCollection,   // atom cache
 }
 
 impl Deref for WmCtl {
@@ -148,11 +148,15 @@ impl WmCtl
 
         // Create the window manager object
         let mut wmctl = WmCtl{
-            conn, screen, root, width, height,
+            conn, atoms,
+            supported: HashMap::<u32, String>::new(),
+            screen, root, width, height,
             work_width: Default::default(),
             work_height: Default::default(),
-            atoms
         };
+
+        // Populate the supported functions cache
+        wmctl.populate_supported_functions_cache()?;
 
         // Get the work area
         let (width, height) = wmctl.workarea()?;
@@ -161,6 +165,17 @@ impl WmCtl
 
         debug!("connect: screen: {}, root: {}, w: {}, h: {}", screen, root, width, height);
         Ok(wmctl)
+    }
+
+    fn populate_supported_functions_cache(&mut self) -> WmCtlResult<()> {
+        let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+        for atom in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
+            if let Ok(name) = atom_to_string(&self.atoms, atom) {
+                trace!("supported: {}", atom_to_string(&self.atoms, atom)?);
+                self.supported.insert(atom, name);
+            }
+        }
+        Ok(())
     }
 
     // Get the active window id
@@ -200,15 +215,10 @@ impl WmCtl
         Ok(num)
     }
 
-    // Get supported window manager messages
+    // Determine if the given function is supported by the window manager
     // Defined as: _NET_SUPPOTED, ATOM[]/32
-    #[allow(dead_code)]
-    pub(crate) fn supported(&self) -> WmCtlResult<()> {
-        let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
-        for atom in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
-            debug!("supported: {}", atom_to_string(&self.atoms, atom)?);
-        }
-        Ok(())
+    pub(crate) fn supported(&self, atom: u32) -> bool {
+        self.supported.get(&atom).is_some()
     }
 
     // Get window manager's window id and name
