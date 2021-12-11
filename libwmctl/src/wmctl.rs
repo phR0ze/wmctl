@@ -17,8 +17,7 @@ use x11rb::{
     atom_manager,
     connection::Connection,
     protocol::xproto::{ConnectionExt as _, self, *},
-    wrapper::ConnectionExt as _,
-    rust_connection::RustConnection,
+    rust_connection::RustConnection, wrapper::ConnectionExt,
 };
 
 // A collection of the atoms we will need.
@@ -108,7 +107,6 @@ atom_manager! {
         _NET_WM_WINDOW_TYPE_UTILITY,
         _NET_WORKAREA,
         UTF8_STRING,
-        WM_CLASS,
     }
 }
 
@@ -229,6 +227,35 @@ impl WmCtl
         self.supported.get(&atom).is_some()
     }
 
+    // Move the given window
+    pub(crate) fn move_win(&self, win: xproto::Window) -> WmCtlResult<()> {
+        let values = ConfigureWindowAux::default().x(10).y(20);
+        self.configure_window(win, &values)?;
+        Ok(())
+    }
+
+    // Move and resize given window
+    pub(crate) fn move_resize_win(&self, win: xproto::Window) -> WmCtlResult<()> {
+        let values = ConfigureWindowAux::default().x(10).y(20).width(120).height(120);
+        self.configure_window(win, &values)?;
+        Ok(())
+    }
+
+    // Resize the given window
+    pub(crate) fn resize_win(&self, win: xproto::Window) -> WmCtlResult<()> {
+        let values = ConfigureWindowAux::default().width(10).height(20);
+        self.configure_window(win, &values)?;
+        Ok(())
+    }
+
+    // Remove the MaxVert and MaxHorz states
+    pub(crate) fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()> {
+        self.change_property32(PropMode::REPLACE, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM,
+            &[self.atoms._NET_WM_STATE_FOCUSED])?.check()?;
+            //&[])?.check()?;
+        Ok(())
+    }
+
     // Get windows optionally all
     pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>> {
         let mut windows = vec![];
@@ -277,6 +304,7 @@ impl WmCtl
     }
 
     // Get window attribrtes
+    #[allow(dead_code)]
     pub(crate) fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)> {
         let attr = self.get_window_attributes(win)?.reply()?;
         debug!("win_attributes: id: {}, class: {:?}, state: {:?}", win, attr.class, attr.map_state);
@@ -285,13 +313,13 @@ impl WmCtl
 
     // Get window class which ends up being the applications name
     pub(crate) fn win_class(&self, win: xproto::Window) -> WmCtlResult<String> {
-        let reply = self.get_property(false, win, self.atoms.WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
+        let reply = self.get_property(false, win, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
 
-        // Skip the first null terminated string
-        let iter = reply.value.into_iter().skip_while(|x| *x != 0).skip(1);
+        // Skip the first null terminated string and extract the second
+        let iter = reply.value.into_iter().skip_while(|x| *x != 0).skip(1).take_while(|x| *x != 0);
 
         // Extract the second null terminated string
-        let class = str::from_utf8(&iter.take_while(|x| *x != 0).collect::<Vec<_>>())?.to_owned();
+        let class = str::from_utf8(&iter.collect::<Vec<_>>())?.to_owned();
         debug!("win_class: id: {}, class: {}", win, class);
         Ok(class)
     }
