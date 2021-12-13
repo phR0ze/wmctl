@@ -36,7 +36,8 @@ pub fn info() -> WmCtlResult<()> {
     println!("{:-<120}", "");
     print_win_header();
     print_win_details(&wmctl, win)?;
-    wmctl.unmaximize_win(win)?;
+    wmctl.move_win(win)?;
+    //wmctl.unmaximize_win(win)?;
     Ok(())
 }
 

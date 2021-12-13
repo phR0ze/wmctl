@@ -1,5 +1,5 @@
 mod logger;
-use std::{env, str::FromStr};
+use std::env;
 use gory::*;
 use witcher::prelude::*;
 use libwmctl::prelude::*;

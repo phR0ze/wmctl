@@ -320,7 +320,6 @@ impl fmt::Display for WinType {
     }
 }
 
-// Simple brute force conversion of an atom to string
 pub(crate) fn atom_to_string(atoms: &AtomCollection, val: u32) -> WmCtlResult<String> { 
     let property = if val == atoms._NET_ACTIVE_WINDOW {
         "_NET_ACTIVE_WINDOW"

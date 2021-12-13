@@ -229,8 +229,11 @@ impl WmCtl
 
     // Move the given window
     pub(crate) fn move_win(&self, win: xproto::Window) -> WmCtlResult<()> {
-        let values = ConfigureWindowAux::default().x(10).y(20);
-        self.configure_window(win, &values)?;
+        let (x, y) = (0, 0);
+        //self.conn.client_message()
+        //let values = ConfigureWindowAux::default().x(x).y(y);
+        //self.configure_window(win, &values)?;
+        debug!("move_win: id: {}, x: {}, y: {}", win, x, y);
         Ok(())
     }
 
@@ -251,7 +254,7 @@ impl WmCtl
     // Remove the MaxVert and MaxHorz states
     pub(crate) fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()> {
         self.change_property32(PropMode::REPLACE, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM,
-            &[self.atoms._NET_WM_STATE_FOCUSED])?.check()?;
+            &[self.atoms._NET_WM_STATE_FOCUSED, x11rb::NONE])?.check()?;
             //&[])?.check()?;
         Ok(())
     }
