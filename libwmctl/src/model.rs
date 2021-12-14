@@ -28,6 +28,7 @@ impl Default for Win {
 
 /// WinPosition
 /// ------------------------------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinPosition {
     Center,

@@ -127,10 +127,10 @@ pub(crate) struct WmCtl
     supported: HashMap<u32, String>,    // cache for supported functions
     pub(crate) screen: usize,           // screen number
     pub(crate) root: u32,               // root window id
-    pub(crate) width: u16,              // screen width
-    pub(crate) height: u16,             // screen height
-    pub(crate) work_width: u16,         // screen height
-    pub(crate) work_height: u16,        // screen height
+    pub(crate) width: u32,              // screen width
+    pub(crate) height: u32,             // screen height
+    pub(crate) work_width: u32,         // screen height
+    pub(crate) work_height: u32,        // screen height
 }
 
 impl Deref for WmCtl {
@@ -143,13 +143,14 @@ impl Deref for WmCtl {
 
 impl WmCtl
 {
-    pub(crate) fn connect() -> WmCtlResult<Self> {
+    pub(crate) fn connect() -> WmCtlResult<Self>
+    {
         let (conn, screen) = x11rb::connect(None)?;
 
         // Get the screen size
         let (width, height, root) = {
             let screen = &conn.setup().roots[screen];
-            (screen.width_in_pixels, screen.height_in_pixels, screen.root)
+            (screen.width_in_pixels as u32, screen.height_in_pixels as u32, screen.root)
         };
 
         // Populate the supported functions cache
@@ -165,14 +166,15 @@ impl WmCtl
 
         // Get the work area
         let (width, height) = wmctl.workarea()?;
-        wmctl.work_width = width;
-        wmctl.work_height = height;
+        wmctl.work_width = width as u32;
+        wmctl.work_height = height as u32;
 
         debug!("connect: screen: {}, root: {}, w: {}, h: {}", screen, root, width, height);
         Ok(wmctl)
     }
 
-    fn init_caching(conn: &RustConnection, root: u32) -> WmCtlResult<(AtomCollection, HashMap<u32, String>)> {
+    fn init_caching(conn: &RustConnection, root: u32) -> WmCtlResult<(AtomCollection, HashMap<u32, String>)>
+    {
         debug!("initializing caching...");
 
         // Cache atoms
@@ -196,7 +198,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_ACTIVE_WINDOW`
     // request message with a `AtomEnum::WINDOW` type response and we can use the `reply.value32()` accessor to
     // retrieve the value.
-    pub(crate) fn active_win(&self) -> WmCtlResult<u32> {
+    pub(crate) fn active_win(&self) -> WmCtlResult<u32>
+    {
         let reply = self.get_property(false, self.root, self.atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
         let win = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_ACTIVE_WINDOW".to_owned()))?;
         debug!("active_win: {}", win);
@@ -207,7 +210,8 @@ impl WmCtl
     // Defined as: _NET_WM_CM_Sn 
     // For each screen the compositing manager manages they MUST acquire ownership of a selection named _NET_WM_CM_Sn,
     // where the suffix `n` is the screen number.
-    pub(crate) fn composite_manager(&self) -> WmCtlResult<bool> {
+    pub(crate) fn composite_manager(&self) -> WmCtlResult<bool>
+    {
         let atom = format!("_NET_WM_CM_S{}", self.screen);
         let atom = self.intern_atom(false, atom.as_bytes())?.reply()?.atom;
         let reply = self.get_selection_owner(atom)?.reply()?;
@@ -221,7 +225,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_NUMBER_OF_DESKTOPS`
     // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
     // retrieve the value.
-    pub(crate) fn desktops(&self) -> WmCtlResult<u32> {
+    pub(crate) fn desktops(&self) -> WmCtlResult<u32>
+    {
         let reply = self.get_property(false, self.root, self.atoms._NET_NUMBER_OF_DESKTOPS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let num = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_NUMBER_OF_DESKTOPS".to_owned()))?;
         debug!("desktops: {}", num);
@@ -231,13 +236,15 @@ impl WmCtl
     // Determine if the given function is supported by the window manager
     // Defined as: _NET_SUPPOTED, ATOM[]/32
     #[allow(dead_code)]
-    pub(crate) fn supported(&self, atom: u32) -> bool {
+    pub(crate) fn supported(&self, atom: u32) -> bool
+    {
         self.supported.get(&atom).is_some()
     }
 
     // Move and resize the given window
-    pub(crate) fn move_resize_win(&self, win: xproto::Window, x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>) -> WmCtlResult<()> {
-
+    pub(crate) fn move_resize_win(&self, win: xproto::Window,
+        x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>) -> WmCtlResult<()>
+    {
         // Construct the move resize message 
         // Using a _NET_MOVERESIZE_WINDOW message with StaticGravity allows Pagers to exactly position
         // and resize a window including its decorations without knowing the size of the decorations. 
@@ -273,7 +280,8 @@ impl WmCtl
     }
 
     // Remove the MaxVert and MaxHorz states
-    pub(crate) fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()> {
+    pub(crate) fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()>
+    {
         self.change_property32(PropMode::REPLACE, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM,
             &[self.atoms._NET_WM_STATE_FOCUSED, x11rb::NONE])?.check()?;
             //&[])?.check()?;
@@ -281,7 +289,8 @@ impl WmCtl
     }
 
     // Get windows optionally all
-    pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>> {
+    pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>>
+    {
         let mut windows = vec![];
         if all {
             // All windows in the X11 system
@@ -301,7 +310,8 @@ impl WmCtl
     }
 
     // Get window manager's window id and name
-    pub(crate) fn winmgr(&self) -> WmCtlResult<(u32, String)> {
+    pub(crate) fn winmgr(&self) -> WmCtlResult<(u32, String)>
+    {
         let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
         let win = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTING_WM_CHECK".to_owned()))?;
         let name = self.win_name(win)?;
@@ -314,7 +324,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WORKAREA`
     // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
     // retrieve the values of which there will be 4 for each desktop as defined (x, y, width, height).
-    pub(crate) fn workarea(&self) -> WmCtlResult<(u16, u16)> {
+    pub(crate) fn workarea(&self) -> WmCtlResult<(u16, u16)>
+    {
         let reply = self.get_property(false, self.root, self.atoms._NET_WORKAREA, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA".to_owned()))?;
         let x = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA x".to_owned()))?;
@@ -329,14 +340,16 @@ impl WmCtl
 
     // Get window attribrtes
     #[allow(dead_code)]
-    pub(crate) fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)> {
+    pub(crate) fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)>
+    {
         let attr = self.get_window_attributes(win)?.reply()?;
         debug!("win_attributes: id: {}, class: {:?}, state: {:?}", win, attr.class, attr.map_state);
         Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
     }
 
     // Get window class which ends up being the applications name
-    pub(crate) fn win_class(&self, win: xproto::Window) -> WmCtlResult<String> {
+    pub(crate) fn win_class(&self, win: xproto::Window) -> WmCtlResult<String>
+    {
         let reply = self.get_property(false, win, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
 
         // Skip the first null terminated string and extract the second
@@ -353,7 +366,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_DESKTOP`
     // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
     // retrieve the values of which there will be a single value.
-    pub(crate) fn win_desktop(&self, win: xproto::Window) -> WmCtlResult<i32> {
+    pub(crate) fn win_desktop(&self, win: xproto::Window) -> WmCtlResult<i32>
+    {
         let reply = self.get_property(false, win, self.atoms._NET_WM_DESKTOP, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let desktop = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_DESKTOP".to_owned()))?;
         debug!("win_desktop: id: {}, desktop: {}", win, desktop);
@@ -365,7 +379,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_FRAME_EXTENTS`
     // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
     // retrieve the values of which there will be...
-    pub(crate) fn win_borders(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, i32, i32)> {
+    pub(crate) fn win_borders(&self, win: xproto::Window) -> WmCtlResult<(u32, u32, u32, u32)>
+    {
         let reply = self.get_property(false, win, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS".to_owned()))?;
         let l = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS left".to_owned()))?;
@@ -373,12 +388,12 @@ impl WmCtl
         let t = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS top".to_owned()))?;
         let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
         debug!("win_extents: id: {}, l: {}, r: {}, t: {}, b: {}", win, l, r, t, b);
-        Ok((l as i32, r as i32, t as i32, b as i32))
+        Ok((l, r, t, b))
     }
 
     // Get window geometry
-    pub(crate) fn win_geometry(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, u32, u32)> {
-
+    pub(crate) fn win_geometry(&self, win: xproto::Window) -> WmCtlResult<(i32, i32, u32, u32)>
+    {
         // The returned x, y location is relative to its parent window making the values completely
         // useless. However using `translate_coordinates` we can have the window manager map those
         // useless values into real world cordinates by passing it the root as the relative window.
@@ -399,8 +414,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_NAME`
     // request message with a `AtomEnum::UTF8_STRING` type response and we can use the `reply.value` accessor to
     // retrieve the value.
-    pub(crate) fn win_name(&self, win: xproto::Window) -> WmCtlResult<String> {
-
+    pub(crate) fn win_name(&self, win: xproto::Window) -> WmCtlResult<String>
+    {
         // First try the _NET_WM_VISIBLE_NAME
         let reply = self.get_property(false, win, self.atoms._NET_WM_VISIBLE_NAME, self.atoms.UTF8_STRING, 0, u32::MAX)?.reply()?;
         if reply.type_ != x11rb::NONE {
@@ -440,7 +455,8 @@ impl WmCtl
 
     // Get window parent
     #[allow(dead_code)]
-    pub(crate) fn win_parent(&self, win: xproto::Window) -> WmCtlResult<u32> {
+    pub(crate) fn win_parent(&self, win: xproto::Window) -> WmCtlResult<u32>
+    {
         let tree = self.query_tree(win)?.reply()?;
         let id = tree.parent;
         debug!("win_parent: id: {}, parent: {:?}", win, id);
@@ -452,7 +468,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_PID`
     // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
     // retrieve the values of which there will be a single value.
-    pub(crate) fn win_pid(&self, win: xproto::Window) -> WmCtlResult<i32> {
+    pub(crate) fn win_pid(&self, win: xproto::Window) -> WmCtlResult<i32>
+    {
         let reply = self.get_property(false, win, self.atoms._NET_WM_PID, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let pid = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_PID".to_owned()))?;
         debug!("win_pid: id: {}, pid: {:?}", win, pid);
@@ -464,7 +481,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_STATE`
     // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
     // retrieve the values of which there will be a single value.
-    pub(crate) fn win_state(&self, win: xproto::Window) -> WmCtlResult<Vec<WinState>> {
+    pub(crate) fn win_state(&self, win: xproto::Window) -> WmCtlResult<Vec<WinState>>
+    {
         let mut states = vec![];
         let reply = self.get_property(false, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
         for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
@@ -480,7 +498,8 @@ impl WmCtl
     // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_WINDOW_TYPE`
     // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
     // retrieve the value.
-    pub(crate) fn win_type(&self, win: xproto::Window) -> WmCtlResult<WinType> {
+    pub(crate) fn win_type(&self, win: xproto::Window) -> WmCtlResult<WinType>
+    {
         let reply = self.get_property(false, win, self.atoms._NET_WM_WINDOW_TYPE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
         let typ = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_WINDOW_TYPE".to_owned()))?;
         let typ = WinType::from(&self.atoms, typ)?;
@@ -491,7 +510,8 @@ impl WmCtl
     // Helper method to print out the data type
     // println!("DataType NET: {:?}", AtomEnum::from(reply.type_ as u8));
     #[allow(dead_code)]
-    pub(crate) fn print_data_type(reply: &GetPropertyReply) {
+    pub(crate) fn print_data_type(reply: &GetPropertyReply)
+    {
         println!("DataType: {:?}", AtomEnum::from(reply.type_ as u8));
     }
 }

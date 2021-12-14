@@ -77,13 +77,55 @@ pub fn move_win(pos: WinPosition) -> WmCtlResult<()> {
     // Get the current window
     let win = wmctl.active_win()?;
     let (x, y, w, h) = wmctl.win_geometry(win)?;
+    let (bl, br, bt, bb) = wmctl.win_borders(win)?;
 
     // Interpret the position as x, y cordinates
     let (x, y) = match pos {
-        WinPosition::Left => (Some(0), None),
-        WinPosition::TopLeft => (Some(0), Some(0)),
-        //WinPosition::Right => (Some(wmctl.width - ), None),
-        _ => (None, None),
+        WinPosition::Center => {
+            // take into account left and right borders
+            let x = wmctl.work_width/2 - (w + bl + br)/2;
+
+            // take into account top and bottom borders
+            let y = wmctl.work_height/2 - (h + bt + bb)/2;
+            (Some(x), Some(y))
+        },
+        WinPosition::Left => {
+            (Some(0), None)
+        },
+        WinPosition::Right => {
+            // take into account side borders
+            let x = wmctl.work_width - w - bl - br;
+            (Some(x), None)
+        },
+        WinPosition::Top => {
+            (None, Some(0))
+        },
+        WinPosition::Bottom => {
+            // take into account top and bottom borders
+            let y = wmctl.work_height - h - bt - bb;
+            (None, Some(y))
+        },
+        WinPosition::TopLeft => {
+            (Some(0), Some(0))
+        },
+        WinPosition::TopRight => {
+            // take into account left and right borders
+            let x = wmctl.work_width - w - bl - br;
+            (Some(x), Some(0))
+        },
+        WinPosition::BottomLeft => {
+            // take into account top and bottom borders
+            let y = wmctl.work_height - h - bt - bb;
+            (Some(0), Some(y))
+        },
+        WinPosition::BottomRight => {
+            // take into account left and right borders
+            let x = wmctl.work_width - w - bl - br;
+
+            // take into account top and bottom borders
+            let y = wmctl.work_height - h - bt - bb;
+            (Some(x), Some(y))
+        },
     };
 
     // Move the current window as indicated
