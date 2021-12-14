@@ -15,9 +15,10 @@ use tracing::{trace, debug};
 
 use x11rb::{
     atom_manager,
-    connection::Connection,
+    connection::{Connection},
     protocol::xproto::{ConnectionExt as _, self, *},
-    rust_connection::RustConnection, wrapper::ConnectionExt,
+    rust_connection::RustConnection,
+    wrapper::ConnectionExt,
 };
 
 // A collection of the atoms we will need.
@@ -109,6 +110,13 @@ atom_manager! {
         UTF8_STRING,
     }
 }
+
+// Define the bit structure for move resize operations
+type MoveResizeWindowFlags = u32;
+const MOVE_RESIZE_WINDOW_X:         MoveResizeWindowFlags = 1 << 8;
+const MOVE_RESIZE_WINDOW_Y:         MoveResizeWindowFlags = 1 << 9;
+const MOVE_RESIZE_WINDOW_WIDTH:     MoveResizeWindowFlags = 1 << 10;
+const MOVE_RESIZE_WINDOW_HEIGHT:    MoveResizeWindowFlags = 1 << 11;
 
 // Window Manager control provides a simplified access layer to the EWMH functions exposed
 // through the x11 libraries.
@@ -227,27 +235,40 @@ impl WmCtl
         self.supported.get(&atom).is_some()
     }
 
-    // Move the given window
-    pub(crate) fn move_win(&self, win: xproto::Window) -> WmCtlResult<()> {
-        let (x, y) = (0, 0);
-        //self.conn.client_message()
-        //let values = ConfigureWindowAux::default().x(x).y(y);
-        //self.configure_window(win, &values)?;
-        debug!("move_win: id: {}, x: {}, y: {}", win, x, y);
-        Ok(())
-    }
+    // Move and resize the given window
+    pub(crate) fn move_resize_win(&self, win: xproto::Window, x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>) -> WmCtlResult<()> {
 
-    // Move and resize given window
-    pub(crate) fn move_resize_win(&self, win: xproto::Window) -> WmCtlResult<()> {
-        let values = ConfigureWindowAux::default().x(10).y(20).width(120).height(120);
-        self.configure_window(win, &values)?;
-        Ok(())
-    }
+        // Construct the move resize message 
+        // Using a _NET_MOVERESIZE_WINDOW message with StaticGravity allows Pagers to exactly position
+        // and resize a window including its decorations without knowing the size of the decorations. 
+        let mut flags = 0u32;
+        if x.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_X;
+        }
+        if y.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_Y;
+        }
+        if w.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_WIDTH;
+        }
+        if h.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_HEIGHT;
+        }
+        let event = ClientMessageEvent::new(32, win, self.atoms._NET_MOVERESIZE_WINDOW,
+            [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)]);
 
-    // Resize the given window
-    pub(crate) fn resize_win(&self, win: xproto::Window) -> WmCtlResult<()> {
-        let values = ConfigureWindowAux::default().width(10).height(20);
-        self.configure_window(win, &values)?;
+        // Pagers wanting to move or resize a window may send a _NET_MOVERESIZE_WINDOW client message
+        // request to the root window instead of using a ConfigureRequest.  Window Managers should treat
+        // a _NET_MOVERESIZE_WINDOW message exactly like a ConfigureRequest (in particular, adhering to
+        // the ICCCM rules about synthetic ConfigureNotify events), except that they should use the
+        // gravity specified in the message. 
+        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
+        self.send_event(false, self.root, mask, &event)?;
+
+        debug!("move_win: id: {}, x: {}, y: {}, w: {}, h: {}",
+            win, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0));
+
+        self.flush()?;
         Ok(())
     }
 

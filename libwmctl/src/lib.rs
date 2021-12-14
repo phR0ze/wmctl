@@ -36,8 +36,6 @@ pub fn info() -> WmCtlResult<()> {
     println!("{:-<120}", "");
     print_win_header();
     print_win_details(&wmctl, win)?;
-    wmctl.move_win(win)?;
-    //wmctl.unmaximize_win(win)?;
     Ok(())
 }
 
@@ -73,11 +71,23 @@ fn print_win_details(wmctl: &WmCtl, win: u32) -> WmCtlResult<()> {
 }
 
 /// Move the active window without changing its size
-pub fn move_win(position: WinPosition) -> WmCtlResult<()> {
-    // let wmctl = WmCtl::connect()?;
-    // let id = wmctl.active_win()?;
-    // let typ = wmctl.win_type(id)?;
-    //wmctl.move_win(id, position)?;
+pub fn move_win(pos: WinPosition) -> WmCtlResult<()> {
+    let wmctl = WmCtl::connect()?;
+
+    // Get the current window
+    let win = wmctl.active_win()?;
+    let (x, y, w, h) = wmctl.win_geometry(win)?;
+
+    // Interpret the position as x, y cordinates
+    let (x, y) = match pos {
+        WinPosition::Left => (Some(0), None),
+        WinPosition::TopLeft => (Some(0), Some(0)),
+        //WinPosition::Right => (Some(wmctl.width - ), None),
+        _ => (None, None),
+    };
+
+    // Move the current window as indicated
+    wmctl.move_resize_win(win, x, y, None, None)?;
     Ok(())
 }
 
