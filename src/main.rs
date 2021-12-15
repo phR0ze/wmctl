@@ -22,11 +22,14 @@ fn init() -> Result<()> {
         .about(&format!("{}", APP_DESCRIPTION.green())[..])
         .setting(AppSettings::SubcommandRequiredElseHelp)
 
-        // Global arguments
+        // Global flags
         .arg(Arg::with_name("test").short("t").long("test").takes_value(false).help("Enable test mode"))
         .arg(Arg::with_name("debug").short("d").long("debug").takes_value(false).help("Enable debug logging"))
         .arg(Arg::with_name("quiet").short("q").long("quiet").takes_value(false).help("Disable all logging"))
+
+        // Global options
         .arg(Arg::with_name("loglevel").long("log-level").value_name("NAME").takes_value(true).help("Sets the log level [error|warn|info|debug|trace] [default: info]"))
+        .arg(Arg::with_name("window").short("w").long("window").value_name("WINDOW").takes_value(true).help("Window to operate against"))
 
         // Version command
         .subcommand(SubCommand::with_name("version").alias("v").alias("ver").about("Print version information"))
@@ -120,6 +123,11 @@ winctl shape 4x3
         _ => None,
     });
 
+    // Determine the target window
+    let win = {
+        matches.value_of("window").and_then(|x| x.parse::<u32>().ok())
+    };
+
     // Version
     if let Some(ref _matches) = matches.subcommand_matches("version") {
         println!("{}: {}", APP_NAME.cyan(), APP_DESCRIPTION.cyan());
@@ -139,7 +147,7 @@ winctl shape 4x3
     // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
         let position = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        libwmctl::move_win(position).pass()?;
+        libwmctl::move_win(win, position).pass()?;
 
     // resize
     } else if let Some(ref matches) = matches.subcommand_matches("resize") {
@@ -150,7 +158,7 @@ winctl shape 4x3
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
         let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
-        libwmctl::shape_win(shape).pass()?;
+        libwmctl::shape_win(win, shape).pass()?;
     }
 
     Ok(())

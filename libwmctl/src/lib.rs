@@ -69,12 +69,12 @@ fn print_win_details(wmctl: &WmCtl, win: u32) -> WmCtlResult<()> {
     Ok(())
 }
 
-/// Move the active window without changing its size
-pub fn move_win(pos: WinPosition) -> WmCtlResult<()> {
+/// Move the given window or active window if not given without changing its size
+pub fn move_win(win: Option<u32>, pos: WinPosition) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
 
     // Get the current window
-    let win = wmctl.active_win()?;
+    let win = win.unwrap_or(wmctl.active_win()?);
     let (_, _, w, h) = wmctl.win_geometry(win)?;
     let (bl, br, bt, bb) = wmctl.win_borders(win)?;
 
@@ -126,12 +126,12 @@ pub fn resize_and_center(x_ratio: u32, y_ratio: u32) -> WmCtlResult<()> {
     Ok(())
 }
 
-/// Shape the active window without moving it
-pub fn shape_win(shape: WinShape) -> WmCtlResult<()> {
+/// Shape the given window or active window if not given without moving it
+pub fn shape_win(win: Option<u32>, shape: WinShape) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
 
     // Get the current window
-    let win = wmctl.active_win()?;
+    let win = win.unwrap_or(wmctl.active_win()?);
     let (_, _, w, h) = wmctl.win_geometry(win)?;
     let (bl, br, bt, bb) = wmctl.win_borders(win)?;
     // wmctl.win_remove_maximize(win)?;
