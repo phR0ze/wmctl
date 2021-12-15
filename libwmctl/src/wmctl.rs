@@ -23,7 +23,7 @@ use x11rb::{
 
 // A collection of the atoms we will need.
 atom_manager! {
-    pub(crate) AtomCollection: AtomCollectionCookie {
+    pub AtomCollection: AtomCollectionCookie {
         _NET_ACTIVE_WINDOW,
         _NET_CLIENT_LIST,
         _NET_CLIENT_LIST_STACKING,
@@ -119,27 +119,9 @@ const MOVE_RESIZE_WINDOW_Y:         MoveResizeWindowFlags = 1 << 9;
 const MOVE_RESIZE_WINDOW_WIDTH:     MoveResizeWindowFlags = 1 << 10;
 const MOVE_RESIZE_WINDOW_HEIGHT:    MoveResizeWindowFlags = 1 << 11;
 
-// Define the lower byte of the move resize flags 32bit value
-// https://tronche.com/gui/x/xlib/window/attributes/gravity.html
-// Defines how the window will shift as it grows or shrinks during a shape change operation.
-// The default value is NorthWest which means that the window will grow to the right and down
-// and will shrink up and left. By changing this to center you can get a more distributed growth
-// or shrink perception.
-type GravityFlag = u32;
-//const GRAVITY_NORTH_WEST: GravityFlag = 1;
-//const GRAVITY_NORTH: GravityFlag = 2;
-//const GRAVITY_NORTH_EAST: GravityFlag = 3;
-//const GRAVITY_WEST: GravityFlag = 4;
-const GRAVITY_CENTER: GravityFlag = 5;
-//const GRAVITY_EAST: GravityFlag = 6;
-//const GRAVITY_SOUTH_WEST: GravityFlag = 7;
-//const GRAVITY_SOUTH: GravityFlag = 8;
-//const GRAVITY_SOUTH_EAST: GravityFlag = 9;
-//const GRAVITY_STATIC: GravityFlag = 10;
-
-// Window Manager control provides a simplified access layer to the EWMH functions exposed
-// through the x11 libraries.
-pub(crate) struct WmCtl
+/// Window Manager control implements the EWMH protocol using x11rb to provide a simplified access
+/// layer to EWHM compatible window managers.
+pub struct WmCtl
 {
     conn: RustConnection,               // x11 connection
     atoms: AtomCollection,              // atom cache
@@ -162,7 +144,8 @@ impl Deref for WmCtl {
 
 impl WmCtl
 {
-    pub(crate) fn connect() -> WmCtlResult<Self>
+    /// Create the window manager control instance and connect to the X11 server
+    pub fn connect() -> WmCtlResult<Self>
     {
         let (conn, screen) = x11rb::connect(None)?;
 
@@ -212,25 +195,25 @@ impl WmCtl
         Ok((atoms, supported))
     }
 
-    // Get the active window id
-    // Defined as: _NET_ACTIVE_WINDOW, WINDOW/32
-    // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_ACTIVE_WINDOW`
-    // request message with a `AtomEnum::WINDOW` type response and we can use the `reply.value32()` accessor to
-    // retrieve the value.
-    pub(crate) fn active_win(&self) -> WmCtlResult<u32>
+    /// Get the active window id
+    pub fn active_win(&self) -> WmCtlResult<u32>
     {
+        // Defined as: _NET_ACTIVE_WINDOW, WINDOW/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_ACTIVE_WINDOW`
+        // request message with a `AtomEnum::WINDOW` type response and we can use the `reply.value32()` accessor to
+        // retrieve the value.
         let reply = self.get_property(false, self.root, self.atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
         let win = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_ACTIVE_WINDOW".to_owned()))?;
         debug!("active_win: {}", win);
         Ok(win)
     }
 
-    // Check if a composit manager is running
-    // Defined as: _NET_WM_CM_Sn 
-    // For each screen the compositing manager manages they MUST acquire ownership of a selection named _NET_WM_CM_Sn,
-    // where the suffix `n` is the screen number.
-    pub(crate) fn composite_manager(&self) -> WmCtlResult<bool>
+    /// Check if a composit manager is running
+    pub fn composite_manager(&self) -> WmCtlResult<bool>
     {
+        // Defined as: _NET_WM_CM_Sn 
+        // For each screen the compositing manager manages they MUST acquire ownership of a
+        // selection named _NET_WM_CM_Sn, where the suffix `n` is the screen number.
         let atom = format!("_NET_WM_CM_S{}", self.screen);
         let atom = self.intern_atom(false, atom.as_bytes())?.reply()?.atom;
         let reply = self.get_selection_owner(atom)?.reply()?;
@@ -240,12 +223,12 @@ impl WmCtl
     }
 
     // Get number of desktops
-    // Defined as: _NET_NUMBER_OF_DESKTOPS, CARDINAL/32
-    // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_NUMBER_OF_DESKTOPS`
-    // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
-    // retrieve the value.
-    pub(crate) fn desktops(&self) -> WmCtlResult<u32>
+    pub fn desktops(&self) -> WmCtlResult<u32>
     {
+        // Defined as: _NET_NUMBER_OF_DESKTOPS, CARDINAL/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_NUMBER_OF_DESKTOPS`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+        // retrieve the value.
         let reply = self.get_property(false, self.root, self.atoms._NET_NUMBER_OF_DESKTOPS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let num = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_NUMBER_OF_DESKTOPS".to_owned()))?;
         debug!("desktops: {}", num);
@@ -253,21 +236,28 @@ impl WmCtl
     }
 
     // Determine if the given function is supported by the window manager
-    // Defined as: _NET_SUPPOTED, ATOM[]/32
     #[allow(dead_code)]
-    pub(crate) fn supported(&self, atom: u32) -> bool
+    pub fn supported(&self, atom: u32) -> bool
     {
         self.supported.get(&atom).is_some()
     }
 
-    // Move and resize the given window
-    pub(crate) fn move_resize_win(&self, win: xproto::Window, gravity: Option<u32>,
+    /// Move and resize the given window
+    pub fn move_resize_win(&self, win: xproto::Window, gravity: Option<u32>,
         x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>) -> WmCtlResult<()>
     {
         // Construct the move resize message 
-        // Using a _NET_MOVERESIZE_WINDOW message with StaticGravity allows Pagers to exactly position
-        // and resize a window including its decorations without knowing the size of the decorations. 
+        //
+        // Gravity is defined as the lower byte of the move resize flags 32bit value
+        // https://tronche.com/gui/x/xlib/window/attributes/gravity.html
+        // Defines how the window will shift as it grows or shrinks during a shape change operation.
+        // The default value is NorthWest which means that the window will grow to the right and down
+        // and will shrink up and left. By changing this to center you can get a more distributed growth
+        // or shrink perception.
         let mut flags = gravity.unwrap_or(0);
+
+        // Define the second byte of the move resize flags 32bit value
+        // Used to indicate that the associated value has been changed and needs to be acted upon
         if x.is_some() {
             flags |= MOVE_RESIZE_WINDOW_X;
         }
@@ -298,8 +288,8 @@ impl WmCtl
         Ok(())
     }
 
-    // Remove the MaxVert and MaxHorz states
-    pub(crate) fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()>
+    /// Remove the MaxVert and MaxHorz states
+    pub fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()>
     {
         self.change_property32(PropMode::REPLACE, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM,
             &[self.atoms._NET_WM_STATE_FOCUSED, x11rb::NONE])?.check()?;
@@ -307,8 +297,8 @@ impl WmCtl
         Ok(())
     }
 
-    // Get windows optionally all
-    pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>>
+    /// Get windows optionally all
+    pub fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>>
     {
         let mut windows = vec![];
         if all {
@@ -328,8 +318,8 @@ impl WmCtl
         Ok(windows)
     }
 
-    // Get window manager's window id and name
-    pub(crate) fn winmgr(&self) -> WmCtlResult<(u32, String)>
+    /// Get window manager's window id and name
+    pub fn winmgr(&self) -> WmCtlResult<(u32, String)>
     {
         let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
         let win = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTING_WM_CHECK".to_owned()))?;
@@ -338,13 +328,13 @@ impl WmCtl
         Ok((win, name))
     }
 
-    // Get desktop work area
-    // Defined as: _NET_WORKAREA, x, y, width, height CARDINAL[][4]/32
-    // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WORKAREA`
-    // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
-    // retrieve the values of which there will be 4 for each desktop as defined (x, y, width, height).
-    pub(crate) fn workarea(&self) -> WmCtlResult<(u16, u16)>
+    /// Get desktop work area
+    pub fn workarea(&self) -> WmCtlResult<(u16, u16)>
     {
+        // Defined as: _NET_WORKAREA, x, y, width, height CARDINAL[][4]/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WORKAREA`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+        // retrieve the values of which there will be 4 for each desktop as defined (x, y, width, height).
         let reply = self.get_property(false, self.root, self.atoms._NET_WORKAREA, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA".to_owned()))?;
         let x = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA x".to_owned()))?;
@@ -359,7 +349,7 @@ impl WmCtl
 
     // Get window attribrtes
     #[allow(dead_code)]
-    pub(crate) fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)>
+    pub fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)>
     {
         let attr = self.get_window_attributes(win)?.reply()?;
         debug!("win_attributes: id: {}, class: {:?}, state: {:?}", win, attr.class, attr.map_state);

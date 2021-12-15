@@ -4,6 +4,8 @@ use std::{fmt, convert};
 use x11rb::protocol::xproto;
 
 /// WinGravity
+/// Gravity is defined as the lower byte of the move resize flags 32bit value
+/// https://tronche.com/gui/x/xlib/window/attributes/gravity.html
 /// ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq)]
@@ -148,7 +150,7 @@ impl convert::TryFrom<String> for WinShape {
 /// ------------------------------------------------------------------------------------------------
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum WinClass {
+pub enum WinClass {
     CopyFromParent,
     InputOnly,
     InputOutput,
@@ -157,7 +159,7 @@ pub(crate) enum WinClass {
 // Convert from u32 to Class
 impl WinClass
 {
-    pub(crate) fn from(val: u32) -> WmCtlResult<WinClass> {
+    pub fn from(val: u32) -> WmCtlResult<WinClass> {
         if val == xproto::WindowClass::COPY_FROM_PARENT.into() {
             Ok(WinClass::CopyFromParent)
         } else if val == xproto::WindowClass::INPUT_ONLY.into() {
@@ -183,7 +185,7 @@ impl fmt::Display for WinClass {
 /// ------------------------------------------------------------------------------------------------
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum WinMap {
+pub enum WinMap {
     Unmapped,
     Unviewable,
     Viewable,
@@ -192,7 +194,7 @@ pub(crate) enum WinMap {
 // Convert from u32 to state
 impl WinMap
 {
-    pub(crate) fn from(val: u32) -> WmCtlResult<WinMap> {
+    pub fn from(val: u32) -> WmCtlResult<WinMap> {
         if val == xproto::MapState::UNMAPPED.into() {
             Ok(WinMap::Unmapped)
         } else if val == xproto::MapState::UNVIEWABLE.into() {
@@ -218,7 +220,7 @@ impl fmt::Display for WinMap {
 /// ------------------------------------------------------------------------------------------------
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum WinState {
+pub enum WinState {
     Above,
     Below,
     DemandsAttention,
@@ -237,7 +239,7 @@ pub(crate) enum WinState {
 // Convert from u32 to State
 impl WinState
 {
-    pub(crate) fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinState> {
+    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinState> {
         if val == atoms._NET_WM_STATE_ABOVE {
             Ok(WinState::Above)
         } else if val == atoms._NET_WM_STATE_BELOW {
@@ -282,7 +284,7 @@ impl fmt::Display for WinState {
 /// ------------------------------------------------------------------------------------------------
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum WinType {
+pub enum WinType {
     Combo,
     Desktop,
     Dialog,
@@ -303,7 +305,7 @@ pub(crate) enum WinType {
 // Convert from u32 to Type
 impl WinType
 {
-    pub(crate) fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinType> {
+    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinType> {
         if val == atoms._NET_WM_WINDOW_TYPE_COMBO {
             Ok(WinType::Combo)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DESKTOP {
@@ -348,7 +350,7 @@ impl fmt::Display for WinType {
     }
 }
 
-pub(crate) fn atom_to_string(atoms: &AtomCollection, val: u32) -> WmCtlResult<String> { 
+pub fn atom_to_string(atoms: &AtomCollection, val: u32) -> WmCtlResult<String> { 
     let property = if val == atoms._NET_ACTIVE_WINDOW {
         "_NET_ACTIVE_WINDOW"
     } else if val == atoms._NET_CLIENT_LIST {
