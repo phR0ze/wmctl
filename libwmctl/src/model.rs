@@ -1,27 +1,40 @@
 use crate::{WmCtlResult, WmCtlError, AtomCollection};
-use std::{fmt, convert::TryFrom};
+use std::{fmt, convert};
 
 use x11rb::protocol::xproto;
 
-/// Win
+/// WinGravity
 /// ------------------------------------------------------------------------------------------------
-#[allow(dead_code)]
-pub(crate) struct Win {
-    pub(crate) id: u32,
-    pub(crate) x: i32,
-    pub(crate) y: i32,
-    pub(crate) w: i32,
-    pub(crate) h: i32,
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WinGravity {
+    Center,
+    None,
 }
 
-impl Default for Win {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            x: Default::default(),
-            y: Default::default(),
-            w: Default::default(),
-            h: Default::default(),
+// Implement format! support
+impl fmt::Display for WinGravity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
+        }
+    }
+}
+
+impl From<u32> for WinGravity {
+    fn from(val: u32) -> Self {
+        match val {
+            5 => WinGravity::Center,
+            _ => WinGravity::None,
+        }
+    }
+}
+
+impl From<WinGravity> for u32 {
+    fn from(val: WinGravity) -> Self {
+        match val {
+            WinGravity::Center => 5,
+            _ => 0,
         }
     }
 }
@@ -40,6 +53,10 @@ pub enum WinPosition {
     TopRight,
     BottomLeft,
     BottomRight,
+    LeftCenter,
+    RightCenter,
+    TopCenter,
+    BottomCenter,
 }
 
 // Implement format! support
@@ -52,7 +69,7 @@ impl fmt::Display for WinPosition {
 }
 
 // Convert from &str to Postiion
-impl TryFrom<&str> for WinPosition {
+impl convert::TryFrom<&str> for WinPosition {
     type Error = WmCtlError;
 
     fn try_from(val: &str) -> Result<Self, Self::Error> {
@@ -66,13 +83,17 @@ impl TryFrom<&str> for WinPosition {
             "top-right" => Ok(WinPosition::TopRight),
             "bottom-left" => Ok(WinPosition::BottomLeft),
             "bottom-right" => Ok(WinPosition::BottomRight),
-            _ => Err(WmCtlError::InvalidPosition(val.to_string()).into()),
+            "left-center" => Ok(WinPosition::LeftCenter),
+            "right-center" => Ok(WinPosition::RightCenter),
+            "top-center" => Ok(WinPosition::TopCenter),
+            "bottom-center" => Ok(WinPosition::BottomCenter),
+            _ => Err(WmCtlError::InvalidWinPosition(val.to_string()).into()),
         }
     }
 }
 
 // Convert from String to Postiion
-impl TryFrom<String> for WinPosition {
+impl convert::TryFrom<String> for WinPosition {
     type Error = WmCtlError;
 
     fn try_from(val: String) -> Result<Self, Self::Error> {
@@ -84,7 +105,10 @@ impl TryFrom<String> for WinPosition {
 /// ------------------------------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinShape {
+    Grow,
+    Shrink,
     Square,
+    Ratio4x3,
 }
 
 // Implement format! support
@@ -97,19 +121,22 @@ impl fmt::Display for WinShape {
 }
 
 // Convert from &str to Shape
-impl TryFrom<&str> for WinShape {
+impl convert::TryFrom<&str> for WinShape {
     type Error = WmCtlError;
 
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val.to_lowercase().as_ref() {
+            "grow" => Ok(WinShape::Grow),
+            "shrink" => Ok(WinShape::Shrink),
             "square" => Ok(WinShape::Square),
-            _ => Err(WmCtlError::InvalidShape(val.to_string()).into()),
+            "4x3" => Ok(WinShape::Ratio4x3),
+            _ => Err(WmCtlError::InvalidWinShape(val.to_string()).into()),
         }
     }
 }
 
 // Convert from a String to a Shape
-impl TryFrom<String> for WinShape {
+impl convert::TryFrom<String> for WinShape {
     type Error = WmCtlError;
 
     fn try_from(val: String) -> Result<Self, Self::Error> {

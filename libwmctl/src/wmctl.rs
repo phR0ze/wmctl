@@ -111,12 +111,31 @@ atom_manager! {
     }
 }
 
-// Define the bit structure for move resize operations
+// Define the second byte of the move resize flags 32bit value
+// Used to indicate that the associated value has been changed and needs to be acted upon
 type MoveResizeWindowFlags = u32;
 const MOVE_RESIZE_WINDOW_X:         MoveResizeWindowFlags = 1 << 8;
 const MOVE_RESIZE_WINDOW_Y:         MoveResizeWindowFlags = 1 << 9;
 const MOVE_RESIZE_WINDOW_WIDTH:     MoveResizeWindowFlags = 1 << 10;
 const MOVE_RESIZE_WINDOW_HEIGHT:    MoveResizeWindowFlags = 1 << 11;
+
+// Define the lower byte of the move resize flags 32bit value
+// https://tronche.com/gui/x/xlib/window/attributes/gravity.html
+// Defines how the window will shift as it grows or shrinks during a shape change operation.
+// The default value is NorthWest which means that the window will grow to the right and down
+// and will shrink up and left. By changing this to center you can get a more distributed growth
+// or shrink perception.
+type GravityFlag = u32;
+//const GRAVITY_NORTH_WEST: GravityFlag = 1;
+//const GRAVITY_NORTH: GravityFlag = 2;
+//const GRAVITY_NORTH_EAST: GravityFlag = 3;
+//const GRAVITY_WEST: GravityFlag = 4;
+const GRAVITY_CENTER: GravityFlag = 5;
+//const GRAVITY_EAST: GravityFlag = 6;
+//const GRAVITY_SOUTH_WEST: GravityFlag = 7;
+//const GRAVITY_SOUTH: GravityFlag = 8;
+//const GRAVITY_SOUTH_EAST: GravityFlag = 9;
+//const GRAVITY_STATIC: GravityFlag = 10;
 
 // Window Manager control provides a simplified access layer to the EWMH functions exposed
 // through the x11 libraries.
@@ -242,13 +261,13 @@ impl WmCtl
     }
 
     // Move and resize the given window
-    pub(crate) fn move_resize_win(&self, win: xproto::Window,
+    pub(crate) fn move_resize_win(&self, win: xproto::Window, gravity: Option<u32>,
         x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>) -> WmCtlResult<()>
     {
         // Construct the move resize message 
         // Using a _NET_MOVERESIZE_WINDOW message with StaticGravity allows Pagers to exactly position
         // and resize a window including its decorations without knowing the size of the decorations. 
-        let mut flags = 0u32;
+        let mut flags = gravity.unwrap_or(0);
         if x.is_some() {
             flags |= MOVE_RESIZE_WINDOW_X;
         }
@@ -387,7 +406,7 @@ impl WmCtl
         let r = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS right".to_owned()))?;
         let t = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS top".to_owned()))?;
         let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
-        debug!("win_extents: id: {}, l: {}, r: {}, t: {}, b: {}", win, l, r, t, b);
+        debug!("win_borders: id: {}, l: {}, r: {}, t: {}, b: {}", win, l, r, t, b);
         Ok((l, r, t, b))
     }
 

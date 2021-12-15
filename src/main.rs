@@ -67,9 +67,12 @@ winctl move center
 
 # Move the active window to the right edge of the screen
 winctl move right
+
+# Move the active window to the bottom center of the screen
+winctl move bottom-center
 ")
             .arg(Arg::with_name("POSITION").index(1).required(true)
-                .value_names(&["center", "left", "right", "top", "bottom", "top-left", "top-right", "bottom-right", "bottom-left"])
+                .value_names(&["center", "left", "right", "top", "bottom", "top-left", "top-right", "bottom-right", "bottom-left", "left-center", "right-center", "top-center", "bottom-center"])
                 .help("position to move the active window to"))
         )
 
@@ -87,17 +90,26 @@ winctl resize 70 80
         )
 
         // Shape
-        .subcommand(SubCommand::with_name("shape").about("Shape and center the active window")
-            .long_about(r"Shape and center the active window
+        .subcommand(SubCommand::with_name("shape").about("Shape the active window")
+            .long_about(r"Shape the active window
 
 Examples:
 
-# Shape and center the active window as a square
+# Grow the active window by 10% on all sides
+winctl shape grow
+
+# Shrink the active window by 10% on all sides
+winctl shape shrink
+
+# Shape the active window as a square
 winctl shape square
+
+# Shape the active window as 4x3 ratio
+winctl shape 4x3
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
-                .value_names(&["3x4", "square"])
-                .help("shape to to use for the active window"))
+                .value_names(&["4x3", "grow", "shrink", "square"])
+                .help("shape directive to use against the active window"))
         )
         .get_matches_from_safe(env::args_os()).pass()?;
 

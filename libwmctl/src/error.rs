@@ -8,8 +8,9 @@ pub type WmCtlResult<T> = std::result::Result<T, ErrorWrapper>;
 pub enum WmCtlError {
     DesktopWinNotFound,
     InvalidAtom(String),
-    InvalidPosition(String),
-    InvalidShape(String),
+    InvalidWinGravity(u32),
+    InvalidWinPosition(String),
+    InvalidWinShape(String),
     InvalidWinClass(u32),
     InvalidWinMap(u32),
     InvalidWinState(u32),
@@ -24,8 +25,9 @@ impl fmt::Display for WmCtlError {
         match *self {
             WmCtlError::DesktopWinNotFound => write!(f, "desktop window was not found"),
             WmCtlError::InvalidAtom(ref err) => write!(f, "invalid atom was given: {}", err),
-            WmCtlError::InvalidPosition(ref err) => write!(f, "invalid position was given: {}", err),
-            WmCtlError::InvalidShape(ref err) => write!(f, "invalid shape was given: {}", err),
+            WmCtlError::InvalidWinGravity(ref err) => write!(f, "invalid gravity was given: {}", err),
+            WmCtlError::InvalidWinPosition(ref err) => write!(f, "invalid position was given: {}", err),
+            WmCtlError::InvalidWinShape(ref err) => write!(f, "invalid shape was given: {}", err),
             WmCtlError::InvalidWinClass(ref err) => write!(f, "invalid class was given: {}", err),
             WmCtlError::InvalidWinMap(ref err) => write!(f, "invalid map was given: {}", err),
             WmCtlError::InvalidWinState(ref err) => write!(f, "invalid state was given: {}", err),

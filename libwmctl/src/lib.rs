@@ -30,7 +30,6 @@ pub fn info() -> WmCtlResult<()> {
     println!("Work area:         {}x{}", wmctl.work_width, wmctl.work_height);
     println!("Screen Size:       {}x{}", wmctl.width, wmctl.height);
     println!("Desktops:          {}", wmctl.desktops()?);
-    //println!("Taskbar:           {} at {}", wmctl.taskbar_size, wmctl.taskbar);
     println!();
     println!("Active Window");
     println!("{:-<120}", "");
@@ -76,60 +75,34 @@ pub fn move_win(pos: WinPosition) -> WmCtlResult<()> {
 
     // Get the current window
     let win = wmctl.active_win()?;
-    let (x, y, w, h) = wmctl.win_geometry(win)?;
+    let (_, _, w, h) = wmctl.win_geometry(win)?;
     let (bl, br, bt, bb) = wmctl.win_borders(win)?;
+
+    // Pre-calculations
+    let cx = wmctl.work_width/2 - (w + bl + br)/2;  // center x
+    let cy = wmctl.work_height/2 - (h + bt + bb)/2; // center y
+    let rx = wmctl.work_width - w - bl - br;        // right x
+    let by = wmctl.work_height - h - bt - bb;       // bottom y
 
     // Interpret the position as x, y cordinates
     let (x, y) = match pos {
-        WinPosition::Center => {
-            // take into account left and right borders
-            let x = wmctl.work_width/2 - (w + bl + br)/2;
-
-            // take into account top and bottom borders
-            let y = wmctl.work_height/2 - (h + bt + bb)/2;
-            (Some(x), Some(y))
-        },
-        WinPosition::Left => {
-            (Some(0), None)
-        },
-        WinPosition::Right => {
-            // take into account side borders
-            let x = wmctl.work_width - w - bl - br;
-            (Some(x), None)
-        },
-        WinPosition::Top => {
-            (None, Some(0))
-        },
-        WinPosition::Bottom => {
-            // take into account top and bottom borders
-            let y = wmctl.work_height - h - bt - bb;
-            (None, Some(y))
-        },
-        WinPosition::TopLeft => {
-            (Some(0), Some(0))
-        },
-        WinPosition::TopRight => {
-            // take into account left and right borders
-            let x = wmctl.work_width - w - bl - br;
-            (Some(x), Some(0))
-        },
-        WinPosition::BottomLeft => {
-            // take into account top and bottom borders
-            let y = wmctl.work_height - h - bt - bb;
-            (Some(0), Some(y))
-        },
-        WinPosition::BottomRight => {
-            // take into account left and right borders
-            let x = wmctl.work_width - w - bl - br;
-
-            // take into account top and bottom borders
-            let y = wmctl.work_height - h - bt - bb;
-            (Some(x), Some(y))
-        },
+        WinPosition::Center => (Some(cx), Some(cy)),
+        WinPosition::Left => (Some(0), None),
+        WinPosition::Right => (Some(rx), None),
+        WinPosition::Top => (None, Some(0)),
+        WinPosition::Bottom => (None, Some(by)),
+        WinPosition::TopLeft => (Some(0), Some(0)),
+        WinPosition::TopRight => (Some(rx), Some(0)),
+        WinPosition::BottomLeft => (Some(0), Some(by)),
+        WinPosition::BottomRight => (Some(rx), Some(by)),
+        WinPosition::LeftCenter => (Some(0), Some(cy)),
+        WinPosition::RightCenter => (Some(rx), Some(cy)),
+        WinPosition::TopCenter => (Some(cx), Some(0)),
+        WinPosition::BottomCenter => (Some(cx), Some(by)),
     };
 
     // Move the current window as indicated
-    wmctl.move_resize_win(win, x, y, None, None)?;
+    wmctl.move_resize_win(win, None, x, y, None, None)?;
     Ok(())
 }
 
@@ -155,28 +128,45 @@ pub fn resize_and_center(x_ratio: u32, y_ratio: u32) -> WmCtlResult<()> {
 
 /// Shape the active window without moving it
 pub fn shape_win(shape: WinShape) -> WmCtlResult<()> {
-    // let wmctl = WmCtl::connect()?;
-    // let win = wmctl.active_win()?;
+    let wmctl = WmCtl::connect()?;
+
+    // Get the current window
+    let win = wmctl.active_win()?;
+    let (_, _, w, h) = wmctl.win_geometry(win)?;
+    let (bl, br, bt, bb) = wmctl.win_borders(win)?;
     // wmctl.win_remove_maximize(win)?;
 
-    // // Set longer side to shorter side
-    // //let 4x3 = 
+    // Pre-calculations
+    let tw = w + bl + br; // total width
+    let th = h + bt + bb; // total height
+    let w10 = (w as f32*0.1) as u32; // 10% of width
+    let h10 = (h as f32*0.1) as u32; // 10% of height
 
-    // let (x, y, mut w, mut h) = wmctl.win_geometry(win)?;
-    // println!("x: {}, y: {}, w: {}, h: {}", x, y, w, h);
-    // if h < w {
-    //     w = h;
-    // }
-    // if w < h {
-    //     h = w;
-    // }
+    let (w, h) = match shape {
+        WinShape::Grow => (Some(w + w10), Some(h + h10)),
+        WinShape::Shrink => (Some(w - w10), Some(h - h10)),
+        WinShape::Square => {
+            if tw > th {
+                (None, Some(tw - bt - bb))
+            } else if th > tw {
+                (Some(th + bt + bb), None)
+            } else {
+                (None, None)
+            }
+        },
+        WinShape::Ratio4x3 => {
+            if tw > th {
+                (None, Some(((tw - bt - bb) as f32 * 3.0/4.0) as u32))
+            } else if th > tw {
+                (Some(((th + bt + bb) as f32 * 4.0/3.0) as u32), None)
+            } else {
+                (None, None)
+            }
+        },
+        _ => (None, None),
+    };
 
-    // // Value returned for y is 28 off??
-    // println!("x: {}, y: {}, w: {}, h: {}", x, y, w, h);
-    // println!("w: {}, h: {}", wmctl.full_width, wmctl.full_height);
-    // println!("w: {}, h: {}", wmctl.work_width, wmctl.work_height);
-
-    // wmctl.move_and_resize(win, x, y, w, h)?;
+    wmctl.move_resize_win(win, Some(WinGravity::Center.into()), None, None, w, h)?;
     Ok(())
 }
 
