@@ -119,27 +119,24 @@ const MOVE_RESIZE_WINDOW_Y:         MoveResizeWindowFlags = 1 << 9;
 const MOVE_RESIZE_WINDOW_WIDTH:     MoveResizeWindowFlags = 1 << 10;
 const MOVE_RESIZE_WINDOW_HEIGHT:    MoveResizeWindowFlags = 1 << 11;
 
+type WindowStateAction = u32;
+const WINDOW_STATE_ACTION_REMOVE:   WindowStateAction = 0;
+const WINDOW_STATE_ACTION_ADD:      WindowStateAction = 1;
+const WINDOW_STATE_ACTION_TOGGLE:   WindowStateAction = 2;
+
 /// Window Manager control implements the EWMH protocol using x11rb to provide a simplified access
 /// layer to EWHM compatible window managers.
 pub struct WmCtl
 {
     conn: RustConnection,               // x11 connection
     atoms: AtomCollection,              // atom cache
-    supported: HashMap<u32, String>,    // cache for supported functions
+    supported: HashMap<u32, bool>,      // cache for supported functions
     pub(crate) screen: usize,           // screen number
     pub(crate) root: u32,               // root window id
     pub(crate) width: u32,              // screen width
     pub(crate) height: u32,             // screen height
     pub(crate) work_width: u32,         // screen height
     pub(crate) work_height: u32,        // screen height
-}
-
-impl Deref for WmCtl {
-	type Target = RustConnection;
-
-	fn deref(&self) -> &Self::Target {
-		&self.conn
-	}
 }
 
 impl WmCtl
@@ -175,7 +172,7 @@ impl WmCtl
         Ok(wmctl)
     }
 
-    fn init_caching(conn: &RustConnection, root: u32) -> WmCtlResult<(AtomCollection, HashMap<u32, String>)>
+    fn init_caching(conn: &RustConnection, root: u32) -> WmCtlResult<(AtomCollection, HashMap<u32, bool>)>
     {
         debug!("initializing caching...");
 
@@ -183,16 +180,23 @@ impl WmCtl
         let atoms = AtomCollection::new(conn)?.reply()?;
 
         // Cache supported functions
-        let mut supported = HashMap::<u32, String>::new();
+        let mut supported = HashMap::<u32, bool>::new();
         let reply = conn.get_property(false, root, atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
         for atom in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
-            if let Ok(name) = atom_to_string(&atoms, atom) {
-                trace!("supported: {}", atom_to_string(&atoms, atom)?);
-                supported.insert(atom, name);
-            }
+            trace!("supported: {}", atom);
+            supported.insert(atom, true);
         }
         debug!("caching initialized");
         Ok((atoms, supported))
+    }
+
+    // Send out the client message event ensureing we flush
+    fn send_event(&self, event: &ClientMessageEvent) -> WmCtlResult<()>
+    {
+        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
+        self.conn.send_event(false, self.root, mask, event)?;
+        self.conn.flush()?;
+        Ok(())
     }
 
     /// Get the active window id
@@ -202,7 +206,7 @@ impl WmCtl
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_ACTIVE_WINDOW`
         // request message with a `AtomEnum::WINDOW` type response and we can use the `reply.value32()` accessor to
         // retrieve the value.
-        let reply = self.get_property(false, self.root, self.atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, self.root, self.atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
         let win = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_ACTIVE_WINDOW".to_owned()))?;
         debug!("active_win: {}", win);
         Ok(win)
@@ -215,8 +219,8 @@ impl WmCtl
         // For each screen the compositing manager manages they MUST acquire ownership of a
         // selection named _NET_WM_CM_Sn, where the suffix `n` is the screen number.
         let atom = format!("_NET_WM_CM_S{}", self.screen);
-        let atom = self.intern_atom(false, atom.as_bytes())?.reply()?.atom;
-        let reply = self.get_selection_owner(atom)?.reply()?;
+        let atom = self.conn.intern_atom(false, atom.as_bytes())?.reply()?.atom;
+        let reply = self.conn.get_selection_owner(atom)?.reply()?;
         let result = reply.owner != x11rb::NONE;
         debug!("composite_manager: {}", result);
         Ok(result)
@@ -229,7 +233,7 @@ impl WmCtl
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_NUMBER_OF_DESKTOPS`
         // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
         // retrieve the value.
-        let reply = self.get_property(false, self.root, self.atoms._NET_NUMBER_OF_DESKTOPS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, self.root, self.atoms._NET_NUMBER_OF_DESKTOPS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let num = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_NUMBER_OF_DESKTOPS".to_owned()))?;
         debug!("desktops: {}", num);
         Ok(num)
@@ -270,30 +274,29 @@ impl WmCtl
         if h.is_some() {
             flags |= MOVE_RESIZE_WINDOW_HEIGHT;
         }
-        let event = ClientMessageEvent::new(32, win, self.atoms._NET_MOVERESIZE_WINDOW,
-            [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)]);
 
         // Pagers wanting to move or resize a window may send a _NET_MOVERESIZE_WINDOW client message
         // request to the root window instead of using a ConfigureRequest.  Window Managers should treat
         // a _NET_MOVERESIZE_WINDOW message exactly like a ConfigureRequest (in particular, adhering to
         // the ICCCM rules about synthetic ConfigureNotify events), except that they should use the
         // gravity specified in the message. 
-        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
-        self.send_event(false, self.root, mask, &event)?;
+        self.send_event(&ClientMessageEvent::new(32, win, self.atoms._NET_MOVERESIZE_WINDOW,
+            [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)]))?;
 
         debug!("move_win: id: {}, x: {}, y: {}, w: {}, h: {}",
             win, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0));
-
-        self.flush()?;
         Ok(())
     }
 
     /// Remove the MaxVert and MaxHorz states
     pub fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()>
-    {
-        self.change_property32(PropMode::REPLACE, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM,
-            &[self.atoms._NET_WM_STATE_FOCUSED, x11rb::NONE])?.check()?;
-            //&[])?.check()?;
+    {  
+        self.send_event(&ClientMessageEvent::new(32, win, self.atoms._NET_WM_STATE, [
+            WINDOW_STATE_ACTION_REMOVE,
+            self.atoms._NET_WM_STATE_MAXIMIZED_HORZ,
+            self.atoms._NET_WM_STATE_MAXIMIZED_VERT,
+            0, 0]))?;
+        debug!("unmaximize: id: {}", win);
         Ok(())
     }
 
@@ -303,14 +306,14 @@ impl WmCtl
         let mut windows = vec![];
         if all {
             // All windows in the X11 system
-            let tree = self.query_tree(self.root)?.reply()?;
+            let tree = self.conn.query_tree(self.root)?.reply()?;
             for win in tree.children {
                 windows.push(win);
             }
         } else {
             // Window manager client windows which is a subset of all windows that have been
             // reparented i.e. new ids and don't map to the same ids as their all windows selves.
-            let reply = self.get_property(false, self.root, self.atoms._NET_CLIENT_LIST, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
+            let reply = self.conn.get_property(false, self.root, self.atoms._NET_CLIENT_LIST, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
             for win in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_CLIENT_LIST".to_owned()))? {
                 windows.push(win)
             }
@@ -321,7 +324,7 @@ impl WmCtl
     /// Get window manager's window id and name
     pub fn winmgr(&self) -> WmCtlResult<(u32, String)>
     {
-        let reply = self.get_property(false, self.root, self.atoms._NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, self.root, self.atoms._NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, u32::MAX)?.reply()?;
         let win = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTING_WM_CHECK".to_owned()))?;
         let name = self.win_name(win)?;
         debug!("winmgr: id: {}, name: {}", win, name);
@@ -335,7 +338,7 @@ impl WmCtl
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WORKAREA`
         // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
         // retrieve the values of which there will be 4 for each desktop as defined (x, y, width, height).
-        let reply = self.get_property(false, self.root, self.atoms._NET_WORKAREA, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, self.root, self.atoms._NET_WORKAREA, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA".to_owned()))?;
         let x = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA x".to_owned()))?;
         let y = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_WORKAREA y".to_owned()))?;
@@ -351,7 +354,7 @@ impl WmCtl
     #[allow(dead_code)]
     pub fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)>
     {
-        let attr = self.get_window_attributes(win)?.reply()?;
+        let attr = self.conn.get_window_attributes(win)?.reply()?;
         debug!("win_attributes: id: {}, class: {:?}, state: {:?}", win, attr.class, attr.map_state);
         Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
     }
@@ -359,7 +362,7 @@ impl WmCtl
     // Get window class which ends up being the applications name
     pub(crate) fn win_class(&self, win: xproto::Window) -> WmCtlResult<String>
     {
-        let reply = self.get_property(false, win, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
 
         // Skip the first null terminated string and extract the second
         let iter = reply.value.into_iter().skip_while(|x| *x != 0).skip(1).take_while(|x| *x != 0);
@@ -377,7 +380,7 @@ impl WmCtl
     // retrieve the values of which there will be a single value.
     pub(crate) fn win_desktop(&self, win: xproto::Window) -> WmCtlResult<i32>
     {
-        let reply = self.get_property(false, win, self.atoms._NET_WM_DESKTOP, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, self.atoms._NET_WM_DESKTOP, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let desktop = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_DESKTOP".to_owned()))?;
         debug!("win_desktop: id: {}, desktop: {}", win, desktop);
         Ok(desktop as i32)
@@ -390,7 +393,7 @@ impl WmCtl
     // retrieve the values of which there will be...
     pub(crate) fn win_borders(&self, win: xproto::Window) -> WmCtlResult<(u32, u32, u32, u32)>
     {
-        let reply = self.get_property(false, win, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS".to_owned()))?;
         let l = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS left".to_owned()))?;
         let r = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS right".to_owned()))?;
@@ -408,10 +411,10 @@ impl WmCtl
         // useless values into real world cordinates by passing it the root as the relative window.
 
         // Get width and heith and useless relative location values
-        let g = self.get_geometry(win)?.reply()?;
+        let g = self.conn.get_geometry(win)?.reply()?;
 
         // Translate the useless retative location values to to real world values
-        let t = self.translate_coordinates(win, self.root, g.x, g.y)?.reply()?;
+        let t = self.conn.translate_coordinates(win, self.root, g.x, g.y)?.reply()?;
 
         let (x, y, w, h) = (t.dst_x, t.dst_y, g.width, g.height);
         debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", win, x, y, w, h);
@@ -426,7 +429,7 @@ impl WmCtl
     pub(crate) fn win_name(&self, win: xproto::Window) -> WmCtlResult<String>
     {
         // First try the _NET_WM_VISIBLE_NAME
-        let reply = self.get_property(false, win, self.atoms._NET_WM_VISIBLE_NAME, self.atoms.UTF8_STRING, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, self.atoms._NET_WM_VISIBLE_NAME, self.atoms.UTF8_STRING, 0, u32::MAX)?.reply()?;
         if reply.type_ != x11rb::NONE {
             if let Ok(value) = str::from_utf8(&reply.value) {
                 if value != "" {
@@ -437,7 +440,7 @@ impl WmCtl
         }
 
         // Next try the _NET_WM_NAME
-        let reply = self.get_property(false, win, self.atoms._NET_WM_NAME, self.atoms.UTF8_STRING, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, self.atoms._NET_WM_NAME, self.atoms.UTF8_STRING, 0, u32::MAX)?.reply()?;
         if reply.type_ != x11rb::NONE {
             if let Ok(value) = str::from_utf8(&reply.value) {
                 if value != "" {
@@ -448,7 +451,7 @@ impl WmCtl
         }
 
         // Fall back on the WM_NAME
-        let reply = self.get_property(false, win, AtomEnum::WM_NAME, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, AtomEnum::WM_NAME, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
         if reply.type_ != x11rb::NONE {
             if let Ok(value) = str::from_utf8(&reply.value) {
                 if value != "" {
@@ -466,7 +469,7 @@ impl WmCtl
     #[allow(dead_code)]
     pub(crate) fn win_parent(&self, win: xproto::Window) -> WmCtlResult<u32>
     {
-        let tree = self.query_tree(win)?.reply()?;
+        let tree = self.conn.query_tree(win)?.reply()?;
         let id = tree.parent;
         debug!("win_parent: id: {}, parent: {:?}", win, id);
         Ok(id)
@@ -479,7 +482,7 @@ impl WmCtl
     // retrieve the values of which there will be a single value.
     pub(crate) fn win_pid(&self, win: xproto::Window) -> WmCtlResult<i32>
     {
-        let reply = self.get_property(false, win, self.atoms._NET_WM_PID, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, self.atoms._NET_WM_PID, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
         let pid = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_PID".to_owned()))?;
         debug!("win_pid: id: {}, pid: {:?}", win, pid);
         Ok(pid as i32)
@@ -493,7 +496,7 @@ impl WmCtl
     pub(crate) fn win_state(&self, win: xproto::Window) -> WmCtlResult<Vec<WinState>>
     {
         let mut states = vec![];
-        let reply = self.get_property(false, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, self.atoms._NET_WM_STATE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
         for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
             let state = WinState::from(&self.atoms, state)?;
             debug!("win_state: id: {}, state: {}", win, state);
@@ -509,7 +512,7 @@ impl WmCtl
     // retrieve the value.
     pub(crate) fn win_type(&self, win: xproto::Window) -> WmCtlResult<WinType>
     {
-        let reply = self.get_property(false, win, self.atoms._NET_WM_WINDOW_TYPE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+        let reply = self.conn.get_property(false, win, self.atoms._NET_WM_WINDOW_TYPE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
         let typ = reply.value32().and_then(|mut x| x.next()).ok_or(WmCtlError::PropertyNotFound("_NET_WM_WINDOW_TYPE".to_owned()))?;
         let typ = WinType::from(&self.atoms, typ)?;
         debug!("win_type: id: {}, type: {:?}", win, typ);

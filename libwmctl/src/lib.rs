@@ -75,6 +75,7 @@ pub fn move_win(win: Option<u32>, pos: WinPosition) -> WmCtlResult<()> {
 
     // Get the current window
     let win = win.unwrap_or(wmctl.active_win()?);
+    wmctl.unmaximize_win(win)?;
     let (_, _, w, h) = wmctl.win_geometry(win)?;
     let (bl, br, bt, bb) = wmctl.win_borders(win)?;
 
@@ -132,6 +133,7 @@ pub fn shape_win(win: Option<u32>, shape: WinShape) -> WmCtlResult<()> {
 
     // Get the current window
     let win = win.unwrap_or(wmctl.active_win()?);
+    wmctl.unmaximize_win(win)?;
     let (_, _, w, h) = wmctl.win_geometry(win)?;
     let (bl, br, bt, bb) = wmctl.win_borders(win)?;
     // wmctl.win_remove_maximize(win)?;
