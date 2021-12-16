@@ -21,7 +21,9 @@
             },
             "args": [
                 "-d",
-                "info"
+                "place",
+                "small",
+                "bottom-left"
             ],
             "cwd": "${workspaceFolder}"
         },

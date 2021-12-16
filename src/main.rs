@@ -79,22 +79,29 @@ winctl move bottom-center
                 .help("position to move the active window to"))
         )
 
-        // Resize and center
-        .subcommand(SubCommand::with_name("resize").about("Resize and center the active window")
-            .long_about(r"Resize and center the active window
+        // Place the window shaping and positioning as directed
+        .subcommand(SubCommand::with_name("place").about("Shape and move the window")
+            .long_about(r"Shape and move the window
 
 Examples:
 
-# w and h are int values 1-100 treated as a percentage of the total screen size
-winctl resize 70 80
+# Shape the active window to half the width but full height and position to the right
+winctl shape halfw right
+
+# Shape the active window to be small and position bottom left
+winctl shape small bottom-left
 ")
-            .arg(Arg::with_name("W_RATIO").index(1).required(true).help("w ratio of total display size to use (1 - 100)"))
-            .arg(Arg::with_name("H_RATIO").index(2).required(true).help("h ratio of total display size to use (1 - 100)")),
+            .arg(Arg::with_name("SHAPE").index(1).required(true)
+                .value_names(&["4x3", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
+                .help("shape directive to use against the window"))
+            .arg(Arg::with_name("POSITION").index(2).required(true)
+                .value_names(&["center", "left", "right", "top", "bottom", "top-left", "top-right", "bottom-right", "bottom-left", "left-center", "right-center", "top-center", "bottom-center"])
+                .help("position to move the window to"))
         )
 
         // Shape
-        .subcommand(SubCommand::with_name("shape").about("Shape the active window")
-            .long_about(r"Shape the active window
+        .subcommand(SubCommand::with_name("shape").about("Shape the window")
+            .long_about(r"Shape the window
 
 Examples:
 
@@ -107,12 +114,15 @@ winctl shape shrink
 # Shape the active window as 4x3 ratio
 winctl shape 4x3
 
-# Shape the active window to be large i.e. 90% of the current screen size
+# Shape the active window to be large i.e. 4x3 ~50% of the current screen size
+winctl shape medium
+
+# Shape the active window to be large i.e. 4x3 ~90% of the current screen size
 winctl shape large
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
-                .value_names(&["4x3", "small", "large", "grow", "max", "shrink", "unmax"])
-                .help("shape directive to use against the active window"))
+                .value_names(&["4x3", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
+                .help("shape directive to use against the window"))
         )
         .get_matches_from_safe(env::args_os()).pass()?;
 
@@ -146,14 +156,14 @@ winctl shape large
 
     // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
-        let position = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        libwmctl::move_win(win, position).pass()?;
+        let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
+        libwmctl::move_win(win, pos).pass()?;
 
-    // resize
-    } else if let Some(ref matches) = matches.subcommand_matches("resize") {
-        let x_ratio = matches.value_of("W_RATIO").unwrap().parse::<u32>().wrap("Failed to convert W_RATIO into a valid 1-100 int")?;
-        let y_ratio = matches.value_of("H_RATIO").unwrap().parse::<u32>().wrap("Failed to convert Y_RATIO into a valid 1-100 int")?;
-        libwmctl::resize_and_center(x_ratio, y_ratio).pass()?;
+    // place
+    } else if let Some(ref matches) = matches.subcommand_matches("place") {
+        let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
+        let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
+        libwmctl::place(win, Some(shape), Some(pos)).pass()?;
 
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
