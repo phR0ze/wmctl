@@ -239,11 +239,16 @@ impl WmCtl
         Ok(num)
     }
 
-    // Determine if the given function is supported by the window manager
-    #[allow(dead_code)]
-    pub fn supported(&self, atom: u32) -> bool
-    {
-        self.supported.get(&atom).is_some()
+    /// Add the MaxVert and MaxHorz states
+    pub fn maximize_win(&self, win: xproto::Window) -> WmCtlResult<()>
+    {  
+        self.send_event(&ClientMessageEvent::new(32, win, self.atoms._NET_WM_STATE, [
+            WINDOW_STATE_ACTION_ADD,
+            self.atoms._NET_WM_STATE_MAXIMIZED_HORZ,
+            self.atoms._NET_WM_STATE_MAXIMIZED_VERT,
+            0, 0]))?;
+        debug!("maximize: id: {}", win);
+        Ok(())
     }
 
     /// Move and resize the given window
@@ -286,6 +291,13 @@ impl WmCtl
         debug!("move_win: id: {}, x: {}, y: {}, w: {}, h: {}",
             win, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0));
         Ok(())
+    }
+
+    // Determine if the given function is supported by the window manager
+    #[allow(dead_code)]
+    pub fn supported(&self, atom: u32) -> bool
+    {
+        self.supported.get(&atom).is_some()
     }
 
     /// Remove the MaxVert and MaxHorz states

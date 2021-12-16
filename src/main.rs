@@ -104,14 +104,14 @@ winctl shape grow
 # Shrink the active window by 10% on all sides
 winctl shape shrink
 
-# Shape the active window as a square
-winctl shape square
-
 # Shape the active window as 4x3 ratio
 winctl shape 4x3
+
+# Shape the active window to be large i.e. 90% of the current screen size
+winctl shape large
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
-                .value_names(&["4x3", "grow", "shrink", "square"])
+                .value_names(&["4x3", "small", "large", "grow", "max", "shrink", "unmax"])
                 .help("shape directive to use against the active window"))
         )
         .get_matches_from_safe(env::args_os()).pass()?;
@@ -138,7 +138,7 @@ winctl shape 4x3
 
     // info
     } else if let Some(_) = matches.subcommand_matches("info") {
-        libwmctl::info().pass()?;
+        libwmctl::info(win).pass()?;
 
     // list
     } else if let Some(matches) = matches.subcommand_matches("list") {

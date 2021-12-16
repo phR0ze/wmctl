@@ -108,9 +108,13 @@ impl convert::TryFrom<String> for WinPosition {
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinShape {
     Grow,
+    Max,
+    Small,
+    Large,
     Shrink,
     Square,
     Ratio4x3,
+    UnMax,
 }
 
 // Implement format! support
@@ -129,9 +133,12 @@ impl convert::TryFrom<&str> for WinShape {
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val.to_lowercase().as_ref() {
             "grow" => Ok(WinShape::Grow),
+            "max" => Ok(WinShape::Max),
+            "small" => Ok(WinShape::Small),
+            "large" => Ok(WinShape::Large),
             "shrink" => Ok(WinShape::Shrink),
-            "square" => Ok(WinShape::Square),
             "4x3" => Ok(WinShape::Ratio4x3),
+            "unmax" => Ok(WinShape::UnMax),
             _ => Err(WmCtlError::InvalidWinShape(val.to_string()).into()),
         }
     }

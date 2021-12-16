@@ -18,10 +18,10 @@ pub mod prelude {
 }
 
 /// Get x11 info
-pub fn info() -> WmCtlResult<()> {
+pub fn info(win: Option<u32>) -> WmCtlResult<()> {
     let wmctl = WmCtl::connect()?;
     let (_, wm_name) = wmctl.winmgr()?;
-    let win = wmctl.active_win()?;
+    let win = win.unwrap_or(wmctl.active_win()?);
     println!("X11 Information");
     println!("-----------------------------------------------------------------------");
     println!("Window Manager:    {}", wm_name);
@@ -133,10 +133,17 @@ pub fn shape_win(win: Option<u32>, shape: WinShape) -> WmCtlResult<()> {
 
     // Get the current window
     let win = win.unwrap_or(wmctl.active_win()?);
+
+    // Handle max/unmax state
+    if shape == WinShape::Max {
+        return wmctl.maximize_win(win)
+    } else if shape == WinShape::UnMax {
+        return wmctl.unmaximize_win(win)
+    }
+
     wmctl.unmaximize_win(win)?;
     let (_, _, w, h) = wmctl.win_geometry(win)?;
     let (bl, br, bt, bb) = wmctl.win_borders(win)?;
-    // wmctl.win_remove_maximize(win)?;
 
     // Pre-calculations
     let tw = w + bl + br; // total width
@@ -145,31 +152,53 @@ pub fn shape_win(win: Option<u32>, shape: WinShape) -> WmCtlResult<()> {
     let h10 = (h as f32*0.1) as u32; // 10% of height
 
     let (w, h) = match shape {
+
+        // Grow the existing dimensions by 10%
         WinShape::Grow => (Some(w + w10), Some(h + h10)),
+
+        // Resize to a quarter of the work screen
+        WinShape::Small => {
+            let w = wmctl.work_width / 2 - bl - br;
+            let h = wmctl.work_height / 2 - bt - bb;
+            (Some(w), Some(h))
+        },
+
+        // Resize to a large 4x3 window
+        WinShape::Large => {
+            let w = wmctl.width as f32 * 0.75;
+            let h = wmctl.height as f32 * 0.90;
+            shape4x3(w as u32, h as u32, bl + br, bt + bb)?
+        },
+
+        // Shrink the existing dimensions by 10%
         WinShape::Shrink => (Some(w - w10), Some(h - h10)),
-        WinShape::Square => {
-            if tw > th {
-                (None, Some(tw - bt - bb))
-            } else if th > tw {
-                (Some(th + bt + bb), None)
-            } else {
-                (None, None)
-            }
-        },
-        WinShape::Ratio4x3 => {
-            if tw > th {
-                (None, Some(((tw - bt - bb) as f32 * 3.0/4.0) as u32))
-            } else if th > tw {
-                (Some(((th + bt + bb) as f32 * 4.0/3.0) as u32), None)
-            } else {
-                (None, None)
-            }
-        },
+
+        // Resize changing the shorter side to be a 4x3 ratio
+        WinShape::Ratio4x3 => shape4x3(w, h, bl + br, bt + bb)?,
+
+        // Don't change anything by default
         _ => (None, None),
     };
 
     wmctl.move_resize_win(win, Some(WinGravity::Center.into()), None, None, w, h)?;
     Ok(())
+}
+
+// Resize changing the shorter side to be a 4x3 ratio using, `w` width, `h` height,
+// `bw` combined left and right borders, `bh` combined top and bottom borders
+fn shape4x3(w: u32, h: u32, bw: u32, bh: u32) -> WmCtlResult<(Option<u32>, Option<u32>)> {
+    let tw = w + bw; // total width
+    let th = h + bh; // total height
+
+    let (w, h) = if tw > th {
+        (None, Some(((tw - bh) as f32 * 3.0/4.0) as u32))
+    } else if th > tw {
+        // Offsetting a bit more for borders
+        (Some(((th + bh) as f32 * 4.0/3.0) as u32), None)
+    } else {
+        (None, None)
+    };
+    Ok((w, h))
 }
 
 #[cfg(test)]
