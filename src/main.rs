@@ -59,7 +59,7 @@ winctl list -a
         .arg(Arg::with_name("all").short("a").long("all").takes_value(false).help("Show all X windows not just WM windows"))
         )
 
-        // Move window to given position
+        // Move
         .subcommand(SubCommand::with_name("move").about("Move the active window")
             .long_about(r"Move the active window
 
@@ -79,7 +79,7 @@ winctl move bottom-center
                 .help("position to move the active window to"))
         )
 
-        // Place the window shaping and positioning as directed
+        // Place
         .subcommand(SubCommand::with_name("place").about("Shape and move the window")
             .long_about(r"Shape and move the window
 
@@ -97,6 +97,19 @@ winctl shape small bottom-left
             .arg(Arg::with_name("POSITION").index(2).required(true)
                 .value_names(&["center", "left", "right", "top", "bottom", "top-left", "top-right", "bottom-right", "bottom-left", "left-center", "right-center", "top-center", "bottom-center"])
                 .help("position to move the window to"))
+        )
+
+        // Resize
+        .subcommand(SubCommand::with_name("resize").about("Resize the window")
+            .long_about(r"Resize the window
+
+Examples:
+
+# w and h are static values of the size of the window
+winctl resize 1276 757
+")
+            .arg(Arg::with_name("WIDTH").index(1).required(true).help("width of the window"))
+            .arg(Arg::with_name("HEIGHT").index(2).required(true).help("height of the window")),
         )
 
         // Shape
@@ -164,6 +177,12 @@ winctl shape large
         let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
         let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
         libwmctl::place(win, Some(shape), Some(pos)).pass()?;
+
+    // resize
+    } else if let Some(ref matches) = matches.subcommand_matches("resize") {
+        let w = matches.value_of("WIDTH").unwrap().parse::<u32>().pass()?;
+        let h = matches.value_of("HEIGHT").unwrap().parse::<u32>().pass()?;
+        libwmctl::resize(win, w, h).pass()?;
 
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {

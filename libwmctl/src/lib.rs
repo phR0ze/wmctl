@@ -37,6 +37,7 @@ pub fn info(win: Option<u32>) -> WmCtlResult<()>
     println!("{:-<120}", "");
     print_win_header();
     print_win_details(&wmctl, win)?;
+    wmctl.win_attributes(win)?;
     Ok(())
 }
 
@@ -109,6 +110,16 @@ pub fn place(win: Option<u32>, shape: Option<WinShape>, pos: Option<WinPosition>
     wmctl.move_resize_win(win, gravity, x, y, sw, sh)
 }
 
+/// Resize the window using the exact values given
+pub fn resize(win: Option<u32>, w: u32, h: u32) -> WmCtlResult<()>
+{
+    let wmctl = WmCtl::connect()?;
+    let win = win.unwrap_or(wmctl.active_win()?);
+    wmctl.move_resize_win(win, None, None, None, Some(w), Some(h))?;
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    wmctl.move_resize_win(win, None, None, None, Some(w), Some(h))
+}
+
 /// Move the given window or active window if not given without changing its size
 fn move_win(wmctl: &WmCtl, win: u32, w: u32, h: u32, bw: u32, bh: u32, pos: WinPosition)
     -> WmCtlResult<(Option<u32>, Option<u32>)>
@@ -167,7 +178,7 @@ fn shape_win(wmctl: &WmCtl, win: u32, w: u32, h: u32, bw: u32, bh: u32, shape: W
                 // Resize to a quarter of the work screen
                 WinShape::Small => {
                     let w = wmctl.work_width / 2 - bw;
-                    let h = wmctl.work_height / 2 - bh;
+                    let h = wmctl.height / 2 - bh;
                     (Some(w), Some(h))
                 },
 

@@ -9,8 +9,8 @@
 //
 // The EWMH spec defines a number of properties that EWHM compliant window managers will maintain
 // and return to clients requesting information.
-use crate::{WmCtlResult, model::*, WmCtlError, WinClass, WinMap, WinState, WinType};
-use std::{str, ops::Deref, collections::HashMap};
+use crate::{WmCtlResult, WmCtlError, model::*};
+use std::{str, sync::Arc, collections::HashMap};
 use tracing::{trace, debug};
 
 use x11rb::{
@@ -18,7 +18,6 @@ use x11rb::{
     connection::{Connection},
     protocol::xproto::{ConnectionExt as _, self, *},
     rust_connection::RustConnection,
-    wrapper::ConnectionExt,
 };
 
 // A collection of the atoms we will need.
@@ -122,13 +121,12 @@ const MOVE_RESIZE_WINDOW_HEIGHT:    MoveResizeWindowFlags = 1 << 11;
 type WindowStateAction = u32;
 const WINDOW_STATE_ACTION_REMOVE:   WindowStateAction = 0;
 const WINDOW_STATE_ACTION_ADD:      WindowStateAction = 1;
-const WINDOW_STATE_ACTION_TOGGLE:   WindowStateAction = 2;
 
 /// Window Manager control implements the EWMH protocol using x11rb to provide a simplified access
 /// layer to EWHM compatible window managers.
 pub struct WmCtl
 {
-    conn: RustConnection,               // x11 connection
+    conn: Arc<RustConnection>,          // x11 connection
     atoms: AtomCollection,              // atom cache
     supported: HashMap<u32, bool>,      // cache for supported functions
     pub(crate) screen: usize,           // screen number
@@ -157,7 +155,8 @@ impl WmCtl
 
         // Create the window manager object
         let mut wmctl = WmCtl{
-            conn, atoms, supported,
+            conn: Arc::new(conn),
+            atoms, supported,
             screen, root, width, height,
             work_width: Default::default(),
             work_height: Default::default(),
@@ -190,11 +189,23 @@ impl WmCtl
         Ok((atoms, supported))
     }
 
-    // Send out the client message event ensureing we flush
+    // I've found that Xfwm4 does not precisely resize a window on the first request. It may be
+    // this is a function of decoratiung the window during a redraw. Because of this unfortunate
+    // shortcoming we have to go for eventual consistency waiting for the expose events and
+    // retrying the request a second time.
+    fn eventual_consistency(&self, event: &ClientMessageEvent) -> WmCtlResult<()>
+    {
+        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
+        self.conn.send_event(false, self.root, mask, event)?.check()?;
+        self.conn.flush()?;
+        Ok(())
+    }
+
+    // Send out the client message event ensuring it is flushed
     fn send_event(&self, event: &ClientMessageEvent) -> WmCtlResult<()>
     {
         let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
-        self.conn.send_event(false, self.root, mask, event)?;
+        self.conn.send_event(false, self.root, mask, event)?.check()?;
         self.conn.flush()?;
         Ok(())
     }
@@ -366,7 +377,7 @@ impl WmCtl
     pub fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)>
     {
         let attr = self.conn.get_window_attributes(win)?.reply()?;
-        debug!("win_attributes: id: {}, class: {:?}, state: {:?}", win, attr.class, attr.map_state);
+        debug!("win_attributes: id: {}, win_gravity: {:?}, bit_gravity: {:?}", win, attr.win_gravity, attr.bit_gravity);
         Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
     }
 
