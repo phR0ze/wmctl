@@ -77,37 +77,52 @@ fn print_win_details(wmctl: &WmCtl, win: u32) -> WmCtlResult<()>
 /// Place the window by optionally modifying its size and optionally modifying its position
 pub fn place(win: Option<u32>, shape: Option<WinShape>, pos: Option<WinPosition>) -> WmCtlResult<()>
 {
-    // Shape the window if directed
-    if let Some(shape) = shape {
-        shape_win(win, shape)?;
-    }
-
-    // Position the window if directed
-    if let Some(pos) = pos {
-        move_win(win, pos)?;
-    }
-    Ok(())
-}
-
-/// Move the given window or active window if not given without changing its size
-pub fn move_win(win: Option<u32>, pos: WinPosition) -> WmCtlResult<()>
-{
     let wmctl = WmCtl::connect()?;
 
-    // Get the current window
+    // Get the window properties
     let win = win.unwrap_or(wmctl.active_win()?);
-    wmctl.unmaximize_win(win)?;
     let (_, _, w, h) = wmctl.win_geometry(win)?;
     let (bl, br, bt, bb) = wmctl.win_borders(win)?;
 
+    // Shape the window if directed
+    let (gravity, sw, sh) = if let Some(shape) = shape {
+        shape_win(&wmctl, win, w, h, bl + br, bt + bb, shape)?
+    } else {
+        (None, None, None)
+    };
+
+    // Don't use gravity if positioning is required
+    let gravity = if pos.is_some() {
+        None
+    } else {
+        gravity
+    };
+
+    // Position the window if directed
+    let (x, y) = if let Some(pos) = pos {
+        move_win(&wmctl, win, sw.unwrap_or(w), sh.unwrap_or(h), bl + br, bt + bb, pos)?
+    } else {
+        (None, None)
+    };
+
+    // Execute the shaping and positioning
+    wmctl.move_resize_win(win, gravity, x, y, sw, sh)
+}
+
+/// Move the given window or active window if not given without changing its size
+fn move_win(wmctl: &WmCtl, win: u32, w: u32, h: u32, bw: u32, bh: u32, pos: WinPosition)
+    -> WmCtlResult<(Option<u32>, Option<u32>)>
+{
+    wmctl.unmaximize_win(win)?;
+
     // Pre-calculations
-    let cx = wmctl.work_width/2 - (w + bl + br)/2;  // center x
-    let cy = wmctl.work_height/2 - (h + bt + bb)/2; // center y
-    let rx = wmctl.work_width - w - bl - br;        // right x
-    let by = wmctl.work_height - h - bt - bb;       // bottom y
+    let cx = wmctl.work_width/2 - (w + bw)/2;  // center x
+    let cy = wmctl.work_height/2 - (h + bh)/2; // center y
+    let rx = wmctl.work_width - w - bw;        // right x
+    let by = wmctl.work_height - h - bh;       // bottom y
 
     // Interpret the position as x, y cordinates
-    let (x, y) = match pos {
+    Ok(match pos {
         WinPosition::Center => (Some(cx), Some(cy)),
         WinPosition::Left => (Some(0), None),
         WinPosition::Right => (Some(rx), None),
@@ -121,67 +136,67 @@ pub fn move_win(win: Option<u32>, pos: WinPosition) -> WmCtlResult<()>
         WinPosition::RightCenter => (Some(rx), Some(cy)),
         WinPosition::TopCenter => (Some(cx), Some(0)),
         WinPosition::BottomCenter => (Some(cx), Some(by)),
-    };
-
-    // Move the current window as indicated
-    wmctl.move_resize_win(win, None, x, y, None, None)?;
-    Ok(())
+    })
 }
 
 /// Shape the given window or active window if not given without moving it
-pub fn shape_win(win: Option<u32>, shape: WinShape) -> WmCtlResult<()>
+fn shape_win(wmctl: &WmCtl, win: u32, w: u32, h: u32, bw: u32, bh: u32, shape: WinShape)
+    -> WmCtlResult<(Option<u32>, Option<u32>, Option<u32>)>
 {
-    let wmctl = WmCtl::connect()?;
-
-    // Get the current window
-    let win = win.unwrap_or(wmctl.active_win()?);
-
-    // Handle max/unmax state
-    if shape == WinShape::Max {
-        return wmctl.maximize_win(win)
-    } else if shape == WinShape::UnMax {
-        return wmctl.unmaximize_win(win)
-    }
-
-    wmctl.unmaximize_win(win)?;
-    let (_, _, w, h) = wmctl.win_geometry(win)?;
-    let (bl, br, bt, bb) = wmctl.win_borders(win)?;
-
-    // Pre-calculations
-    let w10 = (w as f32*0.1) as u32; // 10% of width
-    let h10 = (h as f32*0.1) as u32; // 10% of height
-
-    let (w, h) = match shape {
-
-        // Grow the existing dimensions by 10%
-        WinShape::Grow => (Some(w + w10), Some(h + h10)),
-
-        // Resize to a quarter of the work screen
-        WinShape::Small => {
-            let w = wmctl.work_width / 2 - bl - br;
-            let h = wmctl.work_height / 2 - bt - bb;
-            (Some(w), Some(h))
+    Ok(match shape {
+        WinShape::Max => {
+            wmctl.maximize_win(win)?;
+            (None, None, None)
         },
-
-        // Resize to a large 4x3 window
-        WinShape::Large => {
-            let w = wmctl.width as f32 * 0.75;
-            let h = wmctl.height as f32 * 0.90;
-            shape4x3(w as u32, h as u32, bl + br, bt + bb)?
+        WinShape::UnMax => {
+            wmctl.unmaximize_win(win)?;
+            (None, None, None)
         },
+        _ => {
+            wmctl.unmaximize_win(win)?;
 
-        // Shrink the existing dimensions by 10%
-        WinShape::Shrink => (Some(w - w10), Some(h - h10)),
+            // Pre-calculations
+            let w10 = (w as f32*0.1) as u32; // 10% of width
+            let h10 = (h as f32*0.1) as u32; // 10% of height
 
-        // Resize changing the shorter side to be a 4x3 ratio
-        WinShape::Ratio4x3 => shape4x3(w, h, bl + br, bt + bb)?,
+            let (w, h) = match shape {
 
-        // Don't change anything by default
-        _ => (None, None),
-    };
+                // Grow the existing dimensions by 10%
+                WinShape::Grow => (Some(w + w10), Some(h + h10)),
 
-    wmctl.move_resize_win(win, Some(WinGravity::Center.into()), None, None, w, h)?;
-    Ok(())
+                // Resize to a quarter of the work screen
+                WinShape::Small => {
+                    let w = wmctl.work_width / 2 - bw;
+                    let h = wmctl.work_height / 2 - bh;
+                    (Some(w), Some(h))
+                },
+
+                // Resize to a medium 4x3 window
+                WinShape::Medium => {
+                    let w = wmctl.width as f32 * 0.55;
+                    let h = wmctl.height as f32 * 0.70;
+                    shape4x3(w as u32, h as u32, bw, bh)?
+                },
+
+                // Resize to a large 4x3 window
+                WinShape::Large => {
+                    let w = wmctl.width as f32 * 0.75;
+                    let h = wmctl.height as f32 * 0.90;
+                    shape4x3(w as u32, h as u32, bw, bh)?
+                },
+
+                // Shrink the existing dimensions by 10%
+                WinShape::Shrink => (Some(w - w10), Some(h - h10)),
+
+                // Resize changing the shorter side to be a 4x3 ratio
+                WinShape::Ratio4x3 => shape4x3(w, h, bw, bh)?,
+
+                // Don't change anything by default
+                _ => (None, None),
+            };
+            (Some(WinGravity::Center.into()), w, h)
+        }
+    })
 }
 
 // Resize changing the shorter side to be a 4x3 ratio using, `w` width, `h` height,

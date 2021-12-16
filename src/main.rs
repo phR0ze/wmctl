@@ -157,7 +157,7 @@ winctl shape large
     // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
         let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        libwmctl::move_win(win, pos).pass()?;
+        libwmctl::place(win, None, Some(pos)).pass()?;
 
     // place
     } else if let Some(ref matches) = matches.subcommand_matches("place") {
@@ -168,7 +168,7 @@ winctl shape large
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
         let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
-        libwmctl::shape_win(win, shape).pass()?;
+        libwmctl::place(win, Some(shape), None).pass()?;
     }
 
     Ok(())

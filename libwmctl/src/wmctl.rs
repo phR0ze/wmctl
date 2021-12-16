@@ -288,7 +288,7 @@ impl WmCtl
         self.send_event(&ClientMessageEvent::new(32, win, self.atoms._NET_MOVERESIZE_WINDOW,
             [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)]))?;
 
-        debug!("move_resize_win: id: {}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", win, x, y, w, h);
+        debug!("move_resize_win: id: {}, g: {:?}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", win, gravity, x, y, w, h);
         Ok(())
     }
 
