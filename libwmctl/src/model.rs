@@ -109,6 +109,8 @@ impl convert::TryFrom<String> for WinPosition {
 pub enum WinShape {
     Grow,
     Max,
+    Halfw,
+    Halfh,
     Small,
     Medium,
     Large,
@@ -135,6 +137,8 @@ impl convert::TryFrom<&str> for WinShape {
         match val.to_lowercase().as_ref() {
             "grow" => Ok(WinShape::Grow),
             "max" => Ok(WinShape::Max),
+            "halfw" => Ok(WinShape::Halfw),
+            "halfh" => Ok(WinShape::Halfh),
             "small" => Ok(WinShape::Small),
             "medium" => Ok(WinShape::Medium),
             "large" => Ok(WinShape::Large),

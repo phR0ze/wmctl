@@ -178,6 +178,20 @@ fn shape_win(wmctl: &WmCtl, win: u32, w: u32, h: u32, bw: u32, bh: u32, shape: W
                 // Grow the existing dimensions by 10%
                 WinShape::Grow => (Some(w + w10), Some(h + h10)),
 
+                // Resize to half the width full height
+                WinShape::Halfw => {
+                    let w = wmctl.work_width / 2 - bw;
+                    let h = wmctl.work_height - bh;
+                    (Some(w), Some(h))
+                },
+
+                // Resize to half the height full width
+                WinShape::Halfh  => {
+                    let w = wmctl.work_width - bw;
+                    let h = wmctl.work_height / 2 - bh;
+                    (Some(w), Some(h))
+                },
+
                 // Resize to a quarter of the work screen
                 WinShape::Small => {
                     let w = wmctl.work_width / 2 - bw;

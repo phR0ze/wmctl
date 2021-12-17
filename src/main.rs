@@ -92,7 +92,7 @@ winctl shape halfw right
 winctl shape small bottom-left
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
-                .value_names(&["4x3", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
+                .value_names(&["4x3", "halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
                 .help("shape directive to use against the window"))
             .arg(Arg::with_name("POSITION").index(2).required(true)
                 .value_names(&["center", "left", "right", "top", "bottom", "top-left", "top-right", "bottom-right", "bottom-left", "left-center", "right-center", "top-center", "bottom-center"])
@@ -134,7 +134,7 @@ winctl shape medium
 winctl shape large
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
-                .value_names(&["4x3", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
+                .value_names(&["4x3", "halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
                 .help("shape directive to use against the window"))
         )
         .get_matches_from_safe(env::args_os()).pass()?;
