@@ -4,6 +4,7 @@ use std::error::Error as StdError;
 /// `WmCtlResult<T>` provides a simplified result type with a common error type
 pub type WmCtlResult<T> = std::result::Result<T, ErrorWrapper>;
 
+/// foo
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WmCtlError {
     DesktopWinNotFound,

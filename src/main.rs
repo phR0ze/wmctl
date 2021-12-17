@@ -1,4 +1,30 @@
-mod logger;
+//! `wmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
+//! as a way to work along side EWMH compatible window managers as a companion. `wmctl` provides
+//! the ability to precisely define how windows should be shaped and placed and can fill in gaps
+//! for window managers lacking some shaping or placement features. Mapping `wmctl` commands to user
+//! defined hot key sequences will allow for easy window manipulation beyond what your favorite EWMH
+//! window manager provides.
+//! 
+//! ## Command line examples
+//! 
+//! ### Shape a window
+//! Shape the active window using the pre-defined `small` shape which is a quarter of the screen.
+//! ```bash
+//! wmctl shape small
+//! ```
+//! 
+//! ### Move a window
+//! Move the active window to the bottom left corner of the screen.
+//! ```bash
+//! wmctl move bottom-left
+//! ```
+//! 
+//! ### Place a window
+//! Shape the active window using the pre-defined `small` shape which is a quarter of the screen
+//! and then position it in the bottom left corner of the screen.
+//! ```bash
+//! wmctl place small bottom-left
+//! ```
 use std::env;
 use gory::*;
 use witcher::prelude::*;
@@ -6,14 +32,36 @@ use libwmctl::prelude::*;
 use std::convert::TryFrom;
 use clap::{App, AppSettings, Arg, SubCommand};
 use tracing::Level;
+use tracing_subscriber;
 
-pub const APP_NAME: &str = "wmctl";
-pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const APP_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
-pub const APP_GIT_COMMIT: &str = env!("APP_GIT_COMMIT");
-pub const APP_BUILD_DATE: &str = env!("APP_BUILD_DATE");
+// Configure logging
+#[doc(hidden)]
+fn init_logging(level: Option<Level>) {
 
+    // Use the given log level as highest priority
+    // Use environment log level as second priority
+    // Fallback on INFO if neither is set
+    let loglevel = match level {
+        Some(x) => x,
+        None => match env::var("LOG_LEVEL") {
+            Ok(val) => val.parse().unwrap_or(Level::INFO),
+            Err(_e) => Level::INFO, // default to Info
+        }
+    };
+    tracing_subscriber::fmt()
+        .with_target(false) // turn off file name
+        .with_max_level(loglevel) // set max level to log
+        //.json() // uncomment this line to convert it into json output
+        .init();
+}
+
+#[doc(hidden)]
 fn init() -> Result<()> {
+    const APP_NAME: &str = "wmctl";
+    const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+    const APP_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+    const APP_GIT_COMMIT: &str = env!("APP_GIT_COMMIT");
+    const APP_BUILD_DATE: &str = env!("APP_BUILD_DATE");
 
     // Parse cli args
     // -----------------------------------------------------------------------------------------
@@ -146,7 +194,7 @@ winctl resize 1276 757 0 0
 
     // Execute
     // ---------------------------------------------------------------------------------------------
-    logger::init(match matches.is_present("debug") {
+    init_logging(match matches.is_present("debug") {
         true => Some(Level::DEBUG),
         _ => None,
     });
@@ -204,6 +252,7 @@ winctl resize 1276 757 0 0
     Ok(())
 }
 
+#[doc(hidden)]
 fn main() {
     match init() {
         Ok(_) => 0,

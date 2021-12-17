@@ -1,4 +1,4 @@
-use crate::{WmCtlResult, WmCtlError, AtomCollection};
+use crate::{WmCtlResult, WmCtlError, wmctl::AtomCollection};
 use std::{fmt, convert};
 
 use x11rb::protocol::xproto;

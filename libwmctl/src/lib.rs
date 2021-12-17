@@ -1,9 +1,22 @@
+//! `libwmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
+//! as a way to integrate with EWMH compatible window managers. The EWHM spec builds on the lower
+//! level Inter Client Communication Conventions Manual (ICCCM) to define interactions between
+//! window managers, compositing managers and applications.
+//! 
+//! [Root Window Properties](https://specifications.freedesktop.org/wm-spec/latest/ar01s03.html)  
+//! The EWMH spec defines a number of properties that EWHM compliant window managers will maintain
+//! and return to clients requesting information. `libwmctl` taps into the message queue to retrieve
+//! details about a given window and to than manipulate the given window as desired.
+//! 
+//! `wmctl` uses `libwmctl` with pre-defined shapes and positions to manipulate how a window should
+//! be shaped and positioned on the screen in an ergonomic way; however `libwmctl` could be used
+//! for a variety of reasons.
 mod wmctl;
 mod error;
 mod model;
-use wmctl::*;
-use error::*;
-use model::*;
+pub use error::*;
+pub use model::*;
+pub use wmctl::WmCtl;
 
 /// All essential symbols in a simple consumable form
 ///
@@ -13,13 +26,9 @@ use model::*;
 /// ```
 pub mod prelude {
     pub use crate::*;
-    pub use error::*;
-    pub use model::*;
-    pub use wmctl::*;
 }
 
-/// Window option provides the use of the builder pattern to manipulate a window's
-/// size and position in a user friendly way.
+/// Window option provides an ergonomic way to manipulate a window
 pub struct WinOpt {
     win: Option<u32>,
     w: Option<u32>,
@@ -31,8 +40,16 @@ pub struct WinOpt {
 }
 
 impl WinOpt {
-    /// Create a new window option with the given optional window to work with.
-    /// If window is not given the current active window will be used.
+    /// Create a new window option with the given optional window.
+    /// 
+    /// ### Arguments
+    /// * `win` - id of the window to manipulate else the active window will be used
+    /// 
+    /// ### Examples
+    /// ```
+    /// use libwmctl::prelude::*;
+    /// let win = WinOpt::new(None);
+    /// ```
     pub fn new(win: Option<u32>) -> Self {
         Self {
             win,
@@ -47,6 +64,16 @@ impl WinOpt {
 
     /// Set the width and height the window should be. This option takes priority over
     /// and will set the shape option to None.
+    /// 
+    /// ### Arguments
+    /// * `w` - width the window should be
+    /// * `h` - height the window should be
+    /// 
+    /// ### Examples
+    /// ```
+    /// use libwmctl::prelude::*;
+    /// let win = WinOpt::new(None).size(500, 500);
+    /// ```
     pub fn size(mut self, w: u32, h: u32) -> Self {
         self.w = Some(w);
         self.h = Some(h);
@@ -56,6 +83,16 @@ impl WinOpt {
 
     /// Set the x, y location the window should be. This option takes priority over
     /// and will set the position option to None.
+    /// 
+    /// ### Arguments
+    /// * `x` - x coordinate the window moved to
+    /// * `y` - y coordinate the window moved to
+    /// 
+    /// ### Examples
+    /// ```
+    /// use libwmctl::prelude::*;
+    /// let win = WinOpt::new(None).location(0, 0);
+    /// ```
     pub fn location(mut self, x: u32, y: u32) -> Self {
         self.x = Some(x);
         self.y = Some(y);
@@ -65,6 +102,15 @@ impl WinOpt {
 
     /// Set the shape the window should be. This option will not be set unless
     /// the width and height options are None.
+    /// 
+    /// ### Arguments
+    /// * `shape` - pre-defined shape to manipulate the window into
+    /// 
+    /// ### Examples
+    /// ```
+    /// use libwmctl::prelude::*;
+    /// let win = WinOpt::new(None).shape(WinShape::Large);
+    /// ```
     pub fn shape(mut self, shape: WinShape) -> Self {
         if self.w.is_none() && self.h.is_none() {
             self.shape = Some(shape);
@@ -74,6 +120,15 @@ impl WinOpt {
 
     /// Set the position the window should be. This option will not be set unless
     /// the x and y opitons are None.
+    /// 
+    /// ### Arguments
+    /// * `pos` - pre-defined position to move the window to
+    /// 
+    /// ### Examples
+    /// ```
+    /// use libwmctl::prelude::*;
+    /// let win = WinOpt::new(None).pos(WinPosition::Right);
+    /// ```
     pub fn pos(mut self, pos: WinPosition) -> Self {
         if self.x.is_none() && self.y.is_none() {
             self.pos = Some(pos);
@@ -87,8 +142,13 @@ impl WinOpt {
             self.shape.is_some() || self.pos.is_some()
     }
 
-    /// Place the window according to the specified options. Explicit w, h, x, y values
-    /// will take precedence over shape and pos values.
+    /// Place the window according to the specified options
+    /// 
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = WinOpt::new(None).shape(WinShape::Large).pos(WinPosition::Right);
+    /// ```
     pub fn place(self) -> WmCtlResult<()>
     {
         let execute = self.any();
@@ -133,7 +193,17 @@ impl WinOpt {
     }
 }
 
-/// Get x11 info
+/// List out a x11 information including the window manager's name, if there is a composite
+/// manager running and what the screen and work screen sizes are.
+/// 
+/// ### Arguments
+/// * `win` - id of the window to manipulate else the active window will be used
+/// 
+/// ### Examples
+/// ```ignore
+/// use libwmctl::prelude::*;
+/// libwmctl::info(None).unwrap();
+/// ```
 pub fn info(win: Option<u32>) -> WmCtlResult<()>
 {
     let wmctl = WmCtl::connect()?;
@@ -156,7 +226,16 @@ pub fn info(win: Option<u32>) -> WmCtlResult<()>
     Ok(())
 }
 
-/// List out all the current window ids and their details
+/// List out the windows the window manager is managing and their essential properties
+/// 
+/// ### Arguments
+/// * `all` - when set to true will list all x11 windows not just those the window manager lists
+/// 
+/// ### Examples
+/// ```ignore
+/// use libwmctl::prelude::*;
+/// libwmctl::list().unwrap();
+/// ```
 pub fn list(all: bool) -> WmCtlResult<()>
 {
     let wmctl = WmCtl::connect()?;

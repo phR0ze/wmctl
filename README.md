@@ -1,10 +1,16 @@
 # wmctl
-
-***Rust X11 automation***
+`wmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
+as a way to work along side EWMH compatible window managers as a companion. `wmctl` provides the 
+ability to precisely define how windows should be shaped and placed and can fill in gaps for window 
+managers lacking some shaping or placement features. Mapping wmctl commands to user defined hot key 
+sequences will allow for easy window manipulation beyond what your favorite EWMH window manager 
+provides.
 
 ### Quick links
 * [Usage](#usage)
-  * [Rustc requirments](#rustc-requirements)
+  * [Shape window](#shape-window)
+  * [Move window](#move-window)
+  * [Place window](#place-window)
 * [Contribute](#contribute)
   * [Git-Hook](#git-hook)
 * [License](#license)
@@ -13,10 +19,28 @@
 * [Changelog](#changelog)
 
 ## Usage <a name="usage"/></a>
-
-#### Requires rustc >= 1.42 <a name="rustc-requirements"/></a>
 This minimum rustc requirement is driven by the
 [tracing\_subscriber](https://docs.rs/tracing-subscriber/0.2.15/tracing_subscriber) requirements
+
+### Shape window <a name="shape-window"/></a>
+Shape the active window using the pre-defined `small` shape which is a quarter of the screen.
+```bash
+$ wmctl shape small
+```
+
+### Move window <a name="move-window"/></a>
+Move the active window to the bottom left corner of the screen.
+```bash
+$ wmctl move bottom-left
+```
+
+### Place window <a name="place-window"/></a>
+Combine the shape and move into a single command by placing the window. First the window is shaped 
+using the pre-defined `small` shape then it is moved to the bottom left of the screen in a single 
+operation.
+```bash
+$ wmctl place small bottom-left
+```
 
 ## Contribute <a name="Contribute"/></a>
 Pull requests are always welcome. However understand that they will be evaluated purely on whether
