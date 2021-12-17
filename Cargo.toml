@@ -1,6 +1,6 @@
 [package]
 name = "wmctl"
-version = "0.0.34"
+version = "0.0.35"
 edition = "2018"
 authors = ["phR0ze"]
 license = "MIT OR Apache-2.0"
@@ -27,7 +27,7 @@ exclude = [
 [profile.release]
 opt-level = 3   # Optimize for speed over size
 lto = true      # Futher assist in optimization
-debug = true    # Provide debug symbols for Witcher
+debug = false   # Provide debug symbols for Witcher
 
 [profile.dev]
 opt-level = 0   # Default no optimization
