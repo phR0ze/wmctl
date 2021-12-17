@@ -1,6 +1,6 @@
 [package]
 name = "wmctl"
-version = "0.0.30"
+version = "0.0.31"
 edition = "2018"
 authors = ["phR0ze"]
 license = "MIT OR Apache-2.0"

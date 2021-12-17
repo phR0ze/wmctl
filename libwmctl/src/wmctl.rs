@@ -16,7 +16,7 @@ use tracing::{trace, debug};
 use x11rb::{
     atom_manager,
     connection::{Connection},
-    protocol::xproto::{ConnectionExt as _, self, *},
+    protocol::{xproto::{ConnectionExt as _, self, *}},
     rust_connection::RustConnection,
 };
 
@@ -189,27 +189,6 @@ impl WmCtl
         Ok((atoms, supported))
     }
 
-    // I've found that Xfwm4 does not precisely resize a window on the first request. It may be
-    // this is a function of decoratiung the window during a redraw. Because of this unfortunate
-    // shortcoming we have to go for eventual consistency waiting for the expose events and
-    // retrying the request a second time.
-    fn eventual_consistency(&self, event: &ClientMessageEvent) -> WmCtlResult<()>
-    {
-        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
-        self.conn.send_event(false, self.root, mask, event)?.check()?;
-        self.conn.flush()?;
-        Ok(())
-    }
-
-    // Send out the client message event ensuring it is flushed
-    fn send_event(&self, event: &ClientMessageEvent) -> WmCtlResult<()>
-    {
-        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
-        self.conn.send_event(false, self.root, mask, event)?.check()?;
-        self.conn.flush()?;
-        Ok(())
-    }
-
     /// Get the active window id
     pub fn active_win(&self) -> WmCtlResult<u32>
     {
@@ -253,7 +232,7 @@ impl WmCtl
     /// Add the MaxVert and MaxHorz states
     pub fn maximize_win(&self, win: xproto::Window) -> WmCtlResult<()>
     {  
-        self.send_event(&ClientMessageEvent::new(32, win, self.atoms._NET_WM_STATE, [
+        self.send_event(ClientMessageEvent::new(32, win, self.atoms._NET_WM_STATE, [
             WINDOW_STATE_ACTION_ADD,
             self.atoms._NET_WM_STATE_MAXIMIZED_HORZ,
             self.atoms._NET_WM_STATE_MAXIMIZED_VERT,
@@ -291,15 +270,31 @@ impl WmCtl
             flags |= MOVE_RESIZE_WINDOW_HEIGHT;
         }
 
-        // Pagers wanting to move or resize a window may send a _NET_MOVERESIZE_WINDOW client message
-        // request to the root window instead of using a ConfigureRequest.  Window Managers should treat
-        // a _NET_MOVERESIZE_WINDOW message exactly like a ConfigureRequest (in particular, adhering to
-        // the ICCCM rules about synthetic ConfigureNotify events), except that they should use the
-        // gravity specified in the message. 
-        self.send_event(&ClientMessageEvent::new(32, win, self.atoms._NET_MOVERESIZE_WINDOW,
+        self.send_event(ClientMessageEvent::new(32, win, self.atoms._NET_MOVERESIZE_WINDOW,
             [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)]))?;
 
         debug!("move_resize_win: id: {}, g: {:?}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", win, gravity, x, y, w, h);
+        Ok(())
+    }
+
+    // Send the event ensuring that a flush is called and that the message was precisely
+    // executed in the case of a resize/move.
+    fn send_event(&self, msg: ClientMessageEvent) -> WmCtlResult<()>
+    {
+        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
+        self.conn.send_event(false, self.root, mask, &msg)?.check()?;
+        self.conn.flush()?;
+        debug!("send_event: win: {}", msg.window);
+
+        // I've found that Xfwm4 does not precisely resize a window on the first request. It may be
+        // this is a function of decorating the window during a redraw. At any rate because of this
+        // unfortunate shortcoming we have to send the event a second time.
+        if msg.type_ == self.atoms._NET_MOVERESIZE_WINDOW {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            self.conn.send_event(false, self.root, mask, &msg)?.check()?;
+            self.conn.flush()?;
+            debug!("send_event: win: {}", msg.window);
+        }
         Ok(())
     }
 
@@ -313,7 +308,7 @@ impl WmCtl
     /// Remove the MaxVert and MaxHorz states
     pub fn unmaximize_win(&self, win: xproto::Window) -> WmCtlResult<()>
     {  
-        self.send_event(&ClientMessageEvent::new(32, win, self.atoms._NET_WM_STATE, [
+        self.send_event(ClientMessageEvent::new(32, win, self.atoms._NET_WM_STATE, [
             WINDOW_STATE_ACTION_REMOVE,
             self.atoms._NET_WM_STATE_MAXIMIZED_HORZ,
             self.atoms._NET_WM_STATE_MAXIMIZED_VERT,
