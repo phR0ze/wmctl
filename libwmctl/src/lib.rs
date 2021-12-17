@@ -18,6 +18,121 @@ pub mod prelude {
     pub use wmctl::*;
 }
 
+/// Window option provides the use of the builder pattern to manipulate a window's
+/// size and position in a user friendly way.
+pub struct WinOpt {
+    win: Option<u32>,
+    w: Option<u32>,
+    h: Option<u32>,
+    x: Option<u32>,
+    y: Option<u32>,
+    shape: Option<WinShape>,
+    pos: Option<WinPosition>,
+}
+
+impl WinOpt {
+    /// Create a new window option with the given optional window to work with.
+    /// If window is not given the current active window will be used.
+    pub fn new(win: Option<u32>) -> Self {
+        Self {
+            win,
+            w: Default::default(),
+            h: Default::default(),
+            x: Default::default(),
+            y: Default::default(),
+            shape: Default::default(),
+            pos: Default::default(),
+        }
+    }
+
+    /// Set the width and height the window should be. This option takes priority over
+    /// and will set the shape option to None.
+    pub fn size(mut self, w: u32, h: u32) -> Self {
+        self.w = Some(w);
+        self.h = Some(h);
+        self.shape = None;
+        self
+    }
+
+    /// Set the x, y location the window should be. This option takes priority over
+    /// and will set the position option to None.
+    pub fn location(mut self, x: u32, y: u32) -> Self {
+        self.x = Some(x);
+        self.y = Some(y);
+        self.pos = None;
+        self
+    }
+
+    /// Set the shape the window should be. This option will not be set unless
+    /// the width and height options are None.
+    pub fn shape(mut self, shape: WinShape) -> Self {
+        if self.w.is_none() && self.h.is_none() {
+            self.shape = Some(shape);
+        }
+        self
+    }
+
+    /// Set the position the window should be. This option will not be set unless
+    /// the x and y opitons are None.
+    pub fn pos(mut self, pos: WinPosition) -> Self {
+        if self.x.is_none() && self.y.is_none() {
+            self.pos = Some(pos);
+        }
+        self
+    }
+
+    // Check if any options are set
+    fn any(&self) -> bool {
+        self.w.is_some() || self.h.is_some() || self.x.is_some() || self.y.is_some() ||
+            self.shape.is_some() || self.pos.is_some()
+    }
+
+    /// Place the window according to the specified options. Explicit w, h, x, y values
+    /// will take precedence over shape and pos values.
+    pub fn place(self) -> WmCtlResult<()>
+    {
+        let execute = self.any();
+        let wmctl = WmCtl::connect()?;
+
+        // Get window properties
+        let win = self.win.unwrap_or(wmctl.active_win()?);
+        let (bl, br, bt, bb) = wmctl.win_borders(win)?;
+        let (_, _, w, h) = wmctl.win_geometry(win)?;
+
+        // Shape the window as directed
+        let (gravity, sw, sh) = if let Some(shape) = self.shape {
+            let (gravity, sw, sh) = shape_win(&wmctl, win, w, h, bl + br, bt + bb, shape)?;
+
+            // Don't use gravity if positioning is required
+            if self.pos.is_some() || self.x.is_some() || self.y.is_some() {
+                (None, sw, sh)
+            } else {
+                (gravity, sw, sh)
+            }
+        } else if self.w.is_some() && self.h.is_some() {
+            (None, Some(self.w.unwrap()), Some(self.h.unwrap()))
+        } else {
+            (None, None, None)
+        };
+
+        // Position the window if directed
+        let (x, y) = if let Some(pos) = self.pos {
+            move_win(&wmctl, win, sw.unwrap_or(w), sh.unwrap_or(h), bl + br, bt + bb, pos)?
+        } else if self.x.is_some() && self.y.is_some() {
+            (self.x, self.y)
+        } else {
+            (None, None)
+        };
+
+        // Execute if reason to
+        if execute {
+            wmctl.move_resize_win(win, gravity, x, y, sw, sh)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// Get x11 info
 pub fn info(win: Option<u32>) -> WmCtlResult<()>
 {
@@ -72,54 +187,6 @@ fn print_win_details(wmctl: &WmCtl, win: u32) -> WmCtlResult<()>
         format!("{:<4}", x), format!("{:<4}", y), format!("{:<4}", w), format!("{:<4}", h), 
         format!("{},{},{},{}", l, r, t, b),
         typ.to_string(), format!("{:?}", states), class, name);
-    Ok(())
-}
-
-/// Place the window by optionally modifying its size and optionally modifying its position
-pub fn place(win: Option<u32>, shape: Option<WinShape>, pos: Option<WinPosition>) -> WmCtlResult<()>
-{
-    let wmctl = WmCtl::connect()?;
-
-    // Get the window properties
-    let win = win.unwrap_or(wmctl.active_win()?);
-    let (_, _, w, h) = wmctl.win_geometry(win)?;
-    let (bl, br, bt, bb) = wmctl.win_borders(win)?;
-
-    // Shape the window if directed
-    let (gravity, sw, sh) = if let Some(shape) = shape {
-        shape_win(&wmctl, win, w, h, bl + br, bt + bb, shape)?
-    } else {
-        (None, None, None)
-    };
-
-    // Don't use gravity if positioning is required
-    let gravity = if pos.is_some() {
-        None
-    } else {
-        gravity
-    };
-
-    // Position the window if directed
-    let (x, y) = if let Some(pos) = pos {
-        move_win(&wmctl, win, sw.unwrap_or(w), sh.unwrap_or(h), bl + br, bt + bb, pos)?
-    } else {
-        (None, None)
-    };
-
-    // Execute the shaping and positioning
-    if sw.is_some() || sh.is_some() || x.is_some() || y.is_some() {
-        wmctl.move_resize_win(win, gravity, x, y, sw, sh)
-    } else {
-        Ok(())
-    }
-}
-
-/// Resize the window using the exact values given
-pub fn resize(win: Option<u32>, w: u32, h: u32) -> WmCtlResult<()>
-{
-    let wmctl = WmCtl::connect()?;
-    let win = win.unwrap_or(wmctl.active_win()?);
-    wmctl.move_resize_win(win, None, None, None, Some(w), Some(h))?;
     Ok(())
 }
 

@@ -99,19 +99,6 @@ winctl shape small bottom-left
                 .help("position to move the window to"))
         )
 
-        // Resize
-        .subcommand(SubCommand::with_name("resize").about("Resize the window")
-            .long_about(r"Resize the window
-
-Examples:
-
-# w and h are static values of the size of the window
-winctl resize 1276 757
-")
-            .arg(Arg::with_name("WIDTH").index(1).required(true).help("width of the window"))
-            .arg(Arg::with_name("HEIGHT").index(2).required(true).help("height of the window")),
-        )
-
         // Shape
         .subcommand(SubCommand::with_name("shape").about("Shape the window")
             .long_about(r"Shape the window
@@ -136,6 +123,24 @@ winctl shape large
             .arg(Arg::with_name("SHAPE").index(1).required(true)
                 .value_names(&["4x3", "halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
                 .help("shape directive to use against the window"))
+        )
+
+        // Static
+        .subcommand(SubCommand::with_name("static").about("Resize and move the window")
+            .long_about(r"Resize and move the window statically
+
+Examples:
+
+# w and h are static values of the size of the window
+winctl resize 1276 757
+
+# w and h are static values of the size of the window and x, y are the intended location
+winctl resize 1276 757 0 0
+")
+            .arg(Arg::with_name("WIDTH").index(1).required(true).help("width of the window"))
+            .arg(Arg::with_name("HEIGHT").index(2).required(true).help("height of the window"))
+            .arg(Arg::with_name("X").index(3).required(false).help("x location of the window"))
+            .arg(Arg::with_name("Y").index(4).required(false).help("y location of the window"))
         )
         .get_matches_from_safe(env::args_os()).pass()?;
 
@@ -170,24 +175,30 @@ winctl shape large
     // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
         let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        libwmctl::place(win, None, Some(pos)).pass()?;
+        WinOpt::new(win).pos(pos).place().pass()?;
 
     // place
     } else if let Some(ref matches) = matches.subcommand_matches("place") {
         let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
         let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        libwmctl::place(win, Some(shape), Some(pos)).pass()?;
+        WinOpt::new(win).shape(shape).pos(pos).place().pass()?;
 
-    // resize
-    } else if let Some(ref matches) = matches.subcommand_matches("resize") {
+    // static
+    } else if let Some(ref matches) = matches.subcommand_matches("static") {
         let w = matches.value_of("WIDTH").unwrap().parse::<u32>().pass()?;
         let h = matches.value_of("HEIGHT").unwrap().parse::<u32>().pass()?;
-        libwmctl::resize(win, w, h).pass()?;
+        let mut win = WinOpt::new(win).size(w, h);
+        if matches.value_of("X").is_some() && matches.value_of("Y").is_some() {
+            let x = matches.value_of("X").unwrap().parse::<u32>().pass()?;
+            let y = matches.value_of("Y").unwrap().parse::<u32>().pass()?;
+            win = win.location(x, y);
+        }
+        win.place().pass()?;
 
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
         let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
-        libwmctl::place(win, Some(shape), None).pass()?;
+        WinOpt::new(win).shape(shape).place().pass()?;
     }
 
     Ok(())
