@@ -4,7 +4,6 @@ mod model;
 use wmctl::*;
 use error::*;
 use model::*;
-use tracing::trace;
 
 /// All essential symbols in a simple consumable form
 ///
@@ -16,6 +15,7 @@ pub mod prelude {
     pub use crate::*;
     pub use error::*;
     pub use model::*;
+    pub use wmctl::*;
 }
 
 /// Get x11 info
