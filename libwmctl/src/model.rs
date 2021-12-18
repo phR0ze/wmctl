@@ -6,8 +6,6 @@ use x11rb::protocol::xproto;
 /// WinGravity
 /// Gravity is defined as the lower byte of the move resize flags 32bit value
 /// https://tronche.com/gui/x/xlib/window/attributes/gravity.html
-/// ------------------------------------------------------------------------------------------------
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinGravity {
     Center,
@@ -41,9 +39,8 @@ impl From<WinGravity> for u32 {
     }
 }
 
-/// WinPosition
-/// ------------------------------------------------------------------------------------------------
-
+/// WinPosition provides a number of pre-defined positions on the screen to quickly and easily
+/// move the window to taking into account borders and taskbars automatically.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinPosition {
     Center,
@@ -103,8 +100,8 @@ impl convert::TryFrom<String> for WinPosition {
     }
 }
 
-/// WinShape
-/// ------------------------------------------------------------------------------------------------
+/// WinShape provides a number of pre-defined shapes to manipulate the window into, taking into
+/// account borders and taskbars automatically.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinShape {
     Grow,
@@ -159,8 +156,7 @@ impl convert::TryFrom<String> for WinShape {
     }
 }
 
-/// WinClass
-/// ------------------------------------------------------------------------------------------------
+/// WinClass provides a easy way to identify the different window class types
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinClass {
@@ -194,8 +190,7 @@ impl fmt::Display for WinClass {
     }
 }
 
-/// WinState
-/// ------------------------------------------------------------------------------------------------
+/// WinMap provides an easy way to identify the differnt window map values
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinMap {
@@ -229,8 +224,7 @@ impl fmt::Display for WinMap {
     }
 }
 
-/// WinState
-/// ------------------------------------------------------------------------------------------------
+/// WinState provides an easy way to identify the different window states
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinState {
@@ -293,8 +287,7 @@ impl fmt::Display for WinState {
     }
 }
 
-/// WinType
-/// ------------------------------------------------------------------------------------------------
+/// WinType provides an easy way to identify the different window types
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinType {

@@ -4,7 +4,7 @@ use std::error::Error as StdError;
 /// `WmCtlResult<T>` provides a simplified result type with a common error type
 pub type WmCtlResult<T> = std::result::Result<T, ErrorWrapper>;
 
-/// foo
+/// WmCtlError defines all the internal errors that `libwmctl` might return
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WmCtlError {
     DesktopWinNotFound,
@@ -40,7 +40,8 @@ impl fmt::Display for WmCtlError {
     }
 }
 
-/// Wrapper around all library errors
+/// ErrorWrapper provides wrapper around all the underlying library dependencys that `libwmctl` uses
+/// such that we can easily surface all errors from `libwmctdl` in a single easy way.
 #[derive(Debug)]
 pub enum ErrorWrapper {
     WmCtl(WmCtlError),
