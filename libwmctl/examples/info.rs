@@ -1,18 +1,17 @@
-use witcher::prelude::*;
 use libwmctl::prelude::*;
 
-fn main() -> Result<()> {
-    let wmctl = WmCtl::connect().pass()?;
-    let (_, wm_name) = wmctl.winmgr().pass()?;
-    let win = wmctl.active_win().pass()?;
+fn main() {
+    let wmctl = WmCtl::connect().unwrap();
+    let (_, wm_name) = wmctl.winmgr().unwrap();
+    let win = wmctl.active_win().unwrap();
     println!("X11 Information");
     println!("-----------------------------------------------------------------------");
     println!("Window Manager:    {}", wm_name);
-    println!("Composite Manager: {}", wmctl.composite_manager().pass()?);
+    println!("Composite Manager: {}", wmctl.composite_manager().unwrap());
     println!("Root Window:       {}", wmctl.root());
     println!("Work area:         {}x{}", wmctl.work_width(), wmctl.work_height());
     println!("Screen Size:       {}x{}", wmctl.width(), wmctl.height());
-    println!("Desktops:          {}", wmctl.desktops().pass()?);
+    println!("Desktops:          {}", wmctl.desktops().unwrap());
     println!();
     println!("Active Window");
     println!("{:-<120}", "");
@@ -32,6 +31,4 @@ fn main() -> Result<()> {
         format!("{:<4}", x), format!("{:<4}", y), format!("{:<4}", w), format!("{:<4}", h), 
         format!("{},{},{},{}", l, r, t, b),
         typ.to_string(), format!("{:?}", states), class, name);
-
-    Ok(())
 }
