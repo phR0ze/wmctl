@@ -72,10 +72,10 @@ any additional terms or conditions.
 ---
 
 ## Backlog <a name="backlog"/></a>
-* Add Arch Linux packaging
 
 ## Changelog <a name="changelog"/></a>
 * 12/18/2021
+  * Add Arch Linux packaging
   * Added public documentation
   * Fix to precisely place windows with Xfwm4
   * Completed move, shape and place implementation

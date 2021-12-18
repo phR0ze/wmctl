@@ -24,7 +24,7 @@
 # https://wiki.archlinux.org/title/Rust_package_guidelines
 #-------------------------------------------------------------------------------
 pkgname=wmctl
-pkgver=0.0.37
+pkgver=0.0.41
 pkgrel=1
 pkgdesc="Rust X11 automation"
 url="https://github.com/phR0ze/wmctl"
@@ -33,18 +33,19 @@ depends=('glibc')
 makedepends=('rust')
 license=('MIT' 'APACHE')
 source=("${pkgname-$pkgver}.tar.gz::https://github.com/phR0ze/${pkgname}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('5454e8748bcb9fe6182fdb3136f0b8d369aaca4bc08104477276ca6706d2a685')
+sha256sums=('dcdf107600c136472be1d54b9ba12b77395ee023a99ead73c71fb9144cb2988c')
 
 prepare()
 {
   cd "${srcdir}/${pkgname}-${pkgver}"
   rm -rf ".githooks .vscode"
-  cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+  cargo fetch --target "$CARCH-unknown-linux-gnu"
 }
 
 check()
 {
   cd "${srcdir}/${pkgname}-${pkgver}"
+  rm -rf ".githooks .vscode"
   export RUSTUP_TOOLCHAIN=stable
   cargo test --frozen --all-features
 }
@@ -52,6 +53,7 @@ check()
 build()
 {
   cd "${srcdir}/${pkgname}-${pkgver}"
+  rm -rf ".githooks .vscode"
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
   cargo build --frozen --release --all-features
@@ -59,15 +61,18 @@ build()
 
 package()
 {
+  # Remove cruft
+  rm -rf ".githooks .vscode"
+
   # Create install directory structure
   install -dm 755 "$pkgdir"/{usr/bin,usr/share/"${pkgname}"}
 
   # Install package files
   cd "${srcdir}/${pkgname}-${pkgver}"
-#  install -Dm 644 LICENSE-MIT "${pkgdir}/usr/share/${pkgname}"
-#  install -Dm 644 LICENSE-APACHE"${pkgdir}/usr/share/${pkgname}"
-#  install -Dm 644 README.md "${pkgdir}/usr/share/${pkgname}"
-#  install -Dm 755 "target/release/wmctl" "${pkgdir}/usr/bin"
+  install -Dm 644 LICENSE-MIT "${pkgdir}/usr/share/${pkgname}"
+  install -Dm 644 LICENSE-APACHE "${pkgdir}/usr/share/${pkgname}"
+  install -Dm 644 README.md "${pkgdir}/usr/share/${pkgname}"
+  install -Dm 755 "target/release/wmctl" "${pkgdir}/usr/bin"
 }
 
 # vim: ts=2:sw=2:sts=2
