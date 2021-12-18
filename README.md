@@ -1,4 +1,10 @@
 # wmctl
+[![license-badge](https://img.shields.io/crates/l/fungus.svg)](https://opensource.org/licenses/MIT)
+[![crates.io](https://img.shields.io/crates/v/wmctl.svg)](https://crates.io/crates/wmctl)
+[![Minimum rustc](https://img.shields.io/badge/rustc-1.30+-lightgray.svg)](https://github.com/phR0ze/gory#rustc-requirements)
+
+***Rust X11 automation***
+
 `wmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
 as a way to work along side EWMH compatible window managers as a companion. `wmctl` provides the 
 ability to precisely define how windows should be shaped and placed and can fill in gaps for window 
@@ -66,5 +72,10 @@ any additional terms or conditions.
 ---
 
 ## Backlog <a name="backlog"/></a>
+* Add Arch Linux packaging
 
 ## Changelog <a name="changelog"/></a>
+* 12/18/2021
+  * Added public documentation
+  * Fix to precisely place windows with Xfwm4
+  * Completed move, shape and place implementation

@@ -5,7 +5,7 @@ use x11rb::protocol::xproto;
 
 /// WinGravity
 /// Gravity is defined as the lower byte of the move resize flags 32bit value
-/// https://tronche.com/gui/x/xlib/window/attributes/gravity.html
+/// <https://tronche.com/gui/x/xlib/window/attributes/gravity.html>
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinGravity {
     Center,
