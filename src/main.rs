@@ -4,40 +4,41 @@
 //! for window managers lacking some shaping or placement features. Mapping `wmctl` commands to user
 //! defined hot key sequences will allow for easy window manipulation beyond what your favorite EWMH
 //! window manager provides.
-//! 
+//!
 //! ## Command line examples
-//! 
+//!
 //! ### Shape a window
 //! Shape the active window using the pre-defined `small` shape which is a quarter of the screen.
 //! ```bash
 //! wmctl shape small
 //! ```
-//! 
+//!
 //! ### Move a window
 //! Move the active window to the bottom left corner of the screen.
 //! ```bash
 //! wmctl move bottom-left
 //! ```
-//! 
+//!
 //! ### Place a window
 //! Shape the active window using the pre-defined `small` shape which is a quarter of the screen
 //! and then position it in the bottom left corner of the screen.
 //! ```bash
 //! wmctl place small bottom-left
 //! ```
-use std::env;
-use gory::*;
-use witcher::prelude::*;
-use libwmctl::prelude::*;
 use std::convert::TryFrom;
+use std::env;
+
 use clap::{App, AppSettings, Arg, SubCommand};
+use gory::*;
+use libwmctl::prelude::*;
 use tracing::Level;
 use tracing_subscriber;
+use witcher::prelude::*;
 
 // Configure logging
 #[doc(hidden)]
-fn init_logging(level: Option<Level>) {
-
+fn init_logging(level: Option<Level>)
+{
     // Use the given log level as highest priority
     // Use environment log level as second priority
     // Fallback on INFO if neither is set
@@ -46,7 +47,7 @@ fn init_logging(level: Option<Level>) {
         None => match env::var("LOG_LEVEL") {
             Ok(val) => val.parse().unwrap_or(Level::INFO),
             Err(_e) => Level::INFO, // default to Info
-        }
+        },
     };
     tracing_subscriber::fmt()
         .with_target(false) // turn off file name
@@ -56,7 +57,8 @@ fn init_logging(level: Option<Level>) {
 }
 
 #[doc(hidden)]
-fn init() -> Result<()> {
+fn init() -> Result<()>
+{
     const APP_NAME: &str = "wmctl";
     const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
     const APP_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
@@ -91,7 +93,7 @@ Examples:
 # List out X11 information
 winctl info
 "))
- 
+
         // List out all the windows
         .subcommand(SubCommand::with_name("list").about("List out windows")
             .long_about(r"List out windows
@@ -201,7 +203,9 @@ winctl resize 1276 757 0 0
 
     // Determine the target window
     let win = {
-        matches.value_of("window").and_then(|x| x.parse::<u32>().ok())
+        matches
+            .value_of("window")
+            .and_then(|x| x.parse::<u32>().ok())
     };
 
     // Version
@@ -253,7 +257,8 @@ winctl resize 1276 757 0 0
 }
 
 #[doc(hidden)]
-fn main() {
+fn main()
+{
     match init() {
         Ok(_) => 0,
         Err(err) => {

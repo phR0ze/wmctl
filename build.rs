@@ -1,10 +1,17 @@
-use chrono::prelude::*;
 use std::{fs, path::Path};
 
-fn main() {
+use chrono::prelude::*;
+
+fn main()
+{
     // APP_BUILD_DATE
     let local: DateTime<Local> = Local::now();
-    println!("cargo:rustc-env=APP_BUILD_DATE={}.{:0>2}.{:0>2}", local.year(), local.month(), local.day());
+    println!(
+        "cargo:rustc-env=APP_BUILD_DATE={}.{:0>2}.{:0>2}",
+        local.year(),
+        local.month(),
+        local.day()
+    );
 
     // APP_GIT_COMMIT
     // ---------------------------------------------------------------------
