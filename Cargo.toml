@@ -1,6 +1,6 @@
 [package]
 name = "wmctl"
-version = "0.0.44"
+version = "0.0.45"
 edition = "2021"
 authors = ["phR0ze"]
 license = "MIT OR Apache-2.0"
@@ -40,7 +40,7 @@ opt-level = 0   # Default no optimization
 gory = "0.1"
 tracing = "0.1"
 witcher = "0.1.19"
-libwmctl = { path = "libwmctl" }
+libwmctl = "0.0.45"
 tracing-subscriber = "0.3"
 
 [dependencies.clap]
