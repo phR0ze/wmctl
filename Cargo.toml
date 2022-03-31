@@ -1,6 +1,6 @@
 [package]
 name = "wmctl"
-version = "0.0.43"
+version = "0.0.44"
 edition = "2021"
 authors = ["phR0ze"]
 license = "MIT OR Apache-2.0"
@@ -23,6 +23,9 @@ exclude = [
 # dependencies so the binary dependencies aren't required for the library.
 # path = <dependency> entries in dependencies are automatically included
 [workspace]
+members = [
+  "libwmctl"
+]
 
 # Higher the opt-level value the slower the compile time
 [profile.release]
@@ -37,7 +40,7 @@ opt-level = 0   # Default no optimization
 gory = "0.1"
 tracing = "0.1"
 witcher = "0.1.19"
-libwmctl = "0.0.40"
+libwmctl = { path = "libwmctl" }
 tracing-subscriber = "0.3"
 
 [dependencies.clap]

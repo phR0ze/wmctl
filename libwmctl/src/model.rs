@@ -1,28 +1,34 @@
-use crate::{WmCtlResult, WmCtlError, wmctl::AtomCollection};
-use std::{fmt, convert};
+use std::{convert, fmt};
 
 use x11rb::protocol::xproto;
+
+use crate::{wmctl::AtomCollection, WmCtlError, WmCtlResult};
 
 /// WinGravity
 /// Gravity is defined as the lower byte of the move resize flags 32bit value
 /// <https://tronche.com/gui/x/xlib/window/attributes/gravity.html>
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinGravity {
+pub enum WinGravity
+{
     Center,
     None,
 }
 
 // Implement format! support
-impl fmt::Display for WinGravity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for WinGravity
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         match self {
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
     }
 }
 
-impl From<u32> for WinGravity {
-    fn from(val: u32) -> Self {
+impl From<u32> for WinGravity
+{
+    fn from(val: u32) -> Self
+    {
         match val {
             5 => WinGravity::Center,
             _ => WinGravity::None,
@@ -30,8 +36,10 @@ impl From<u32> for WinGravity {
     }
 }
 
-impl From<WinGravity> for u32 {
-    fn from(val: WinGravity) -> Self {
+impl From<WinGravity> for u32
+{
+    fn from(val: WinGravity) -> Self
+    {
         match val {
             WinGravity::Center => 5,
             _ => 0,
@@ -42,7 +50,8 @@ impl From<WinGravity> for u32 {
 /// WinPosition provides a number of pre-defined positions on the screen to quickly and easily
 /// move the window to taking into account borders and taskbars automatically.
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinPosition {
+pub enum WinPosition
+{
     Center,
     Left,
     Right,
@@ -59,8 +68,10 @@ pub enum WinPosition {
 }
 
 // Implement format! support
-impl fmt::Display for WinPosition {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for WinPosition
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         match self {
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
@@ -68,10 +79,12 @@ impl fmt::Display for WinPosition {
 }
 
 // Convert from &str to Postiion
-impl convert::TryFrom<&str> for WinPosition {
+impl convert::TryFrom<&str> for WinPosition
+{
     type Error = WmCtlError;
 
-    fn try_from(val: &str) -> Result<Self, Self::Error> {
+    fn try_from(val: &str) -> Result<Self, Self::Error>
+    {
         match val.to_lowercase().as_ref() {
             "center" => Ok(WinPosition::Center),
             "left" => Ok(WinPosition::Left),
@@ -92,10 +105,12 @@ impl convert::TryFrom<&str> for WinPosition {
 }
 
 // Convert from String to Postiion
-impl convert::TryFrom<String> for WinPosition {
+impl convert::TryFrom<String> for WinPosition
+{
     type Error = WmCtlError;
 
-    fn try_from(val: String) -> Result<Self, Self::Error> {
+    fn try_from(val: String) -> Result<Self, Self::Error>
+    {
         WinPosition::try_from(val.as_str())
     }
 }
@@ -103,7 +118,8 @@ impl convert::TryFrom<String> for WinPosition {
 /// WinShape provides a number of pre-defined shapes to manipulate the window into, taking into
 /// account borders and taskbars automatically.
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinShape {
+pub enum WinShape
+{
     Grow,
     Max,
     Halfw,
@@ -113,13 +129,14 @@ pub enum WinShape {
     Large,
     Shrink,
     Square,
-    Ratio4x3,
     UnMax,
 }
 
 // Implement format! support
-impl fmt::Display for WinShape {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for WinShape
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         match self {
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
@@ -127,10 +144,12 @@ impl fmt::Display for WinShape {
 }
 
 // Convert from &str to Shape
-impl convert::TryFrom<&str> for WinShape {
+impl convert::TryFrom<&str> for WinShape
+{
     type Error = WmCtlError;
 
-    fn try_from(val: &str) -> Result<Self, Self::Error> {
+    fn try_from(val: &str) -> Result<Self, Self::Error>
+    {
         match val.to_lowercase().as_ref() {
             "grow" => Ok(WinShape::Grow),
             "max" => Ok(WinShape::Max),
@@ -140,7 +159,6 @@ impl convert::TryFrom<&str> for WinShape {
             "medium" => Ok(WinShape::Medium),
             "large" => Ok(WinShape::Large),
             "shrink" => Ok(WinShape::Shrink),
-            "4x3" => Ok(WinShape::Ratio4x3),
             "unmax" => Ok(WinShape::UnMax),
             _ => Err(WmCtlError::InvalidWinShape(val.to_string()).into()),
         }
@@ -148,10 +166,12 @@ impl convert::TryFrom<&str> for WinShape {
 }
 
 // Convert from a String to a Shape
-impl convert::TryFrom<String> for WinShape {
+impl convert::TryFrom<String> for WinShape
+{
     type Error = WmCtlError;
 
-    fn try_from(val: String) -> Result<Self, Self::Error> {
+    fn try_from(val: String) -> Result<Self, Self::Error>
+    {
         WinShape::try_from(val.as_str())
     }
 }
@@ -159,7 +179,8 @@ impl convert::TryFrom<String> for WinShape {
 /// WinClass provides a easy way to identify the different window class types
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinClass {
+pub enum WinClass
+{
     CopyFromParent,
     InputOnly,
     InputOutput,
@@ -168,7 +189,8 @@ pub enum WinClass {
 // Convert from u32 to Class
 impl WinClass
 {
-    pub fn from(val: u32) -> WmCtlResult<WinClass> {
+    pub fn from(val: u32) -> WmCtlResult<WinClass>
+    {
         if val == xproto::WindowClass::COPY_FROM_PARENT.into() {
             Ok(WinClass::CopyFromParent)
         } else if val == xproto::WindowClass::INPUT_ONLY.into() {
@@ -182,8 +204,10 @@ impl WinClass
 }
 
 // Implement format! support
-impl fmt::Display for WinClass {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for WinClass
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         match self {
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
@@ -193,7 +217,8 @@ impl fmt::Display for WinClass {
 /// WinMap provides an easy way to identify the differnt window map values
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinMap {
+pub enum WinMap
+{
     Unmapped,
     Unviewable,
     Viewable,
@@ -202,7 +227,8 @@ pub enum WinMap {
 // Convert from u32 to state
 impl WinMap
 {
-    pub fn from(val: u32) -> WmCtlResult<WinMap> {
+    pub fn from(val: u32) -> WmCtlResult<WinMap>
+    {
         if val == xproto::MapState::UNMAPPED.into() {
             Ok(WinMap::Unmapped)
         } else if val == xproto::MapState::UNVIEWABLE.into() {
@@ -216,8 +242,10 @@ impl WinMap
 }
 
 // Implement format! support
-impl fmt::Display for WinMap {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for WinMap
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         match self {
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
@@ -227,7 +255,8 @@ impl fmt::Display for WinMap {
 /// WinState provides an easy way to identify the different window states
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinState {
+pub enum WinState
+{
     Above,
     Below,
     DemandsAttention,
@@ -246,7 +275,8 @@ pub enum WinState {
 // Convert from u32 to State
 impl WinState
 {
-    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinState> {
+    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinState>
+    {
         if val == atoms._NET_WM_STATE_ABOVE {
             Ok(WinState::Above)
         } else if val == atoms._NET_WM_STATE_BELOW {
@@ -278,8 +308,10 @@ impl WinState
 }
 
 // Implement format! support
-impl fmt::Display for WinState {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for WinState
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         match self {
             WinState::Invalid => write!(f, ""),
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
@@ -290,7 +322,8 @@ impl fmt::Display for WinState {
 /// WinType provides an easy way to identify the different window types
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinType {
+pub enum WinType
+{
     Combo,
     Desktop,
     Dialog,
@@ -311,7 +344,8 @@ pub enum WinType {
 // Convert from u32 to Type
 impl WinType
 {
-    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinType> {
+    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinType>
+    {
         if val == atoms._NET_WM_WINDOW_TYPE_COMBO {
             Ok(WinType::Combo)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DESKTOP {
@@ -347,8 +381,10 @@ impl WinType
 }
 
 // Implement format! support
-impl fmt::Display for WinType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for WinType
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         match self {
             WinType::Invalid => write!(f, ""),
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),

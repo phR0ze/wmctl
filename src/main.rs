@@ -1,7 +1,7 @@
 //! `wmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
-//! as a way to work along side EWMH compatible window managers as a companion. `wmctl` provides
-//! the ability to precisely define how windows should be shaped and placed and can fill in gaps
-//! for window managers lacking some shaping or placement features. Mapping `wmctl` commands to user
+//! as a way to work along side EWMH compatible window managers as a companion. `wmctl` provides the
+//! ability to precisely define how windows should be shaped and placed and can fill in gaps for
+//! window managers lacking some shaping or placement features. Mapping `wmctl` commands to user
 //! defined hot key sequences will allow for easy window manipulation beyond what your favorite EWMH
 //! window manager provides.
 //!
@@ -142,7 +142,7 @@ winctl shape halfw right
 winctl shape small bottom-left
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
-                .value_names(&["4x3", "halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
+                .value_names(&["halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
                 .help("shape directive to use against the window"))
             .arg(Arg::with_name("POSITION").index(2).required(true)
                 .value_names(&["center", "left", "right", "top", "bottom", "top-left", "top-right", "bottom-right", "bottom-left", "left-center", "right-center", "top-center", "bottom-center"])
@@ -161,9 +161,6 @@ winctl shape grow
 # Shrink the active window by 10% on all sides
 winctl shape shrink
 
-# Shape the active window as 4x3 ratio
-winctl shape 4x3
-
 # Shape the active window to be large i.e. 4x3 ~50% of the current screen size
 winctl shape medium
 
@@ -171,7 +168,7 @@ winctl shape medium
 winctl shape large
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
-                .value_names(&["4x3", "halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
+                .value_names(&["halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
                 .help("shape directive to use against the window"))
         )
 
@@ -202,11 +199,7 @@ winctl resize 1276 757 0 0
     });
 
     // Determine the target window
-    let win = {
-        matches
-            .value_of("window")
-            .and_then(|x| x.parse::<u32>().ok())
-    };
+    let win = { matches.value_of("window").and_then(|x| x.parse::<u32>().ok()) };
 
     // Version
     if let Some(ref _matches) = matches.subcommand_matches("version") {

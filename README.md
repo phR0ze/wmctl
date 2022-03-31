@@ -25,8 +25,11 @@ provides.
 * [Changelog](#changelog)
 
 ## Usage <a name="usage"/></a>
-This minimum rustc requirement is driven by the
+***rustc >= 1.30*** is required due to the 
 [tracing\_subscriber](https://docs.rs/tracing-subscriber/0.2.15/tracing_subscriber) requirements
+
+`$ wmctl -h` for cli help
+![help image](docs/images/help.png)
 
 ### Shape window <a name="shape-window"/></a>
 Shape the active window using the pre-defined `small` shape which is a quarter of the screen.
