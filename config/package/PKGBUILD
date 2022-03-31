@@ -1,5 +1,5 @@
 # MIT License
-# Copyright (c) 2021 phR0ze
+# Copyright (c) 2021-2022 phR0ze
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
 # https://wiki.archlinux.org/title/Rust_package_guidelines
 #-------------------------------------------------------------------------------
 pkgname=wmctl
-pkgver=0.0.41
+pkgver=0.0.45
 pkgrel=1
 pkgdesc="Rust X11 automation"
 url="https://github.com/phR0ze/wmctl"
@@ -33,7 +33,7 @@ depends=('glibc')
 makedepends=('rust')
 license=('MIT' 'APACHE')
 source=("${pkgname-$pkgver}.tar.gz::https://github.com/phR0ze/${pkgname}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('dcdf107600c136472be1d54b9ba12b77395ee023a99ead73c71fb9144cb2988c')
+sha256sums=('12121e5376762f6b8e0f29db0e8adebb01214e9dd4a83443c76eb2ccdc7b5148')
 
 prepare()
 {
