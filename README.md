@@ -12,6 +12,11 @@ managers lacking some shaping or placement features. Mapping wmctl commands to u
 sequences will allow for easy window manipulation beyond what your favorite EWMH window manager 
 provides.
 
+### Disclaimer
+***wmctl*** comes with absolutely no guarantees or support of any kind. It is to be used at
+your own risk. Any damages, issues, losses or problems caused by the use of ***wmctl*** are
+strictly the responsiblity of the user and not the developer/creator of ***wmctl***.
+
 ### Quick links
 * [Usage](#usage)
   * [Shape window](#shape-window)
