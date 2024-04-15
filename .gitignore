@@ -6,4 +6,3 @@ config/package/pkg
 config/package/*.tar.gz
 config/package/*.tar.zst
 bin/
-Cargo.lock
