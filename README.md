@@ -22,33 +22,33 @@ strictly the responsiblity of the user and not the developer/creator of ***wmctl
   * [Shape window](#shape-window)
   * [Move window](#move-window)
   * [Place window](#place-window)
-* [Contribute](#contribute)
-  * [Git-Hook](#git-hook)
+* [Development](#development)
+  * [Run Examples](#run-examples)
 * [License](#license)
   * [Contribution](#contribution)
 * [Backlog](#backlog)
 * [Changelog](#changelog)
 
-## Usage <a name="usage"/></a>
+## Usage
 ***rustc >= 1.30*** is required due to the 
 [tracing\_subscriber](https://docs.rs/tracing-subscriber/0.2.15/tracing_subscriber) requirements
 
 `$ wmctl -h` for cli help
 ![help image](docs/images/help.png)
 
-### Shape window <a name="shape-window"/></a>
+### Shape window
 Shape the active window using the pre-defined `small` shape which is a quarter of the screen.
 ```bash
 $ wmctl shape small
 ```
 
-### Move window <a name="move-window"/></a>
+### Move window
 Move the active window to the bottom left corner of the screen.
 ```bash
 $ wmctl move bottom-left
 ```
 
-### Place window <a name="place-window"/></a>
+### Place window
 Combine the shape and move into a single command by placing the window. First the window is shaped 
 using the pre-defined `small` shape then it is moved to the bottom left of the screen in a single 
 operation.
@@ -56,32 +56,29 @@ operation.
 $ wmctl place small bottom-left
 ```
 
-## Contribute <a name="Contribute"/></a>
-Pull requests are always welcome. However understand that they will be evaluated purely on whether
-or not the change fits with my goals/ideals for the project.
+## Development
 
-### Git-Hook <a name="git-hook"/></a>
-Enable the git hooks to have automatic version increments
-```bash
-cd ~/Projects/wmctl
-git config core.hooksPath .githooks
-```
+### Run Examples
 
-## License <a name="license"/></a>
+
+## License
 This project is licensed under either of:
  * MIT license [LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT
  * Apache License, Version 2.0 [LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0
 
-### Contribution <a name="contribution"/></a>
+### Contribution
+Pull requests are always welcome. However understand that they will be evaluated purely on whether
+or not the change fits with my goals/ideals for the project.
+
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
 this project by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without
 any additional terms or conditions.
 
 ---
 
-## Backlog <a name="backlog"/></a>
+## Backlog
 
-## Changelog <a name="changelog"/></a>
+## Changelog
 * 12/18/2021
   * Add Arch Linux packaging
   * Added public documentation

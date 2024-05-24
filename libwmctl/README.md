@@ -19,17 +19,16 @@ provides.
   * [Place window](#place-window)
   * [Window Manager info](#window-manager-info)
 * [Contribute](#contribute)
-  * [Git-Hook](#git-hook)
 * [License](#license)
   * [Contribution](#contribution)
 * [Backlog](#backlog)
 * [Changelog](#changelog)
 
-## Usage <a name="usage"/></a>
+## Usage
 This minimum rustc requirement is driven by the
 [tracing\_subscriber](https://docs.rs/tracing-subscriber/0.2.15/tracing_subscriber) requirements
 
-### Shape window <a name="shape-window"/></a>
+### Shape window
 Shape the active window using the pre-defined `WinShape::Small` shape which is a quarter of the 
 screen.
 
@@ -41,7 +40,7 @@ fn main() {
 }
 ```
 
-### Move window <a name="move-window"/></a>
+### Move window
 Move the active window to the bottom left corner of the screen using the pre-defined 
 `WinPosition::BottomLeft` position.
 
@@ -53,7 +52,7 @@ fn main() {
 }
 ```
 
-### Place window <a name="place-window"/></a>
+### Place window
 Combine the shape and move into a single command by placing the window. First the window is shaped 
 using the pre-defined `WinShap::Small` shape then it is moved to the bottom left using the 
 pre-defined `WinPosition:BottomLeft` position in a single operation.
@@ -66,7 +65,7 @@ fn main() {
 }
 ```
 
-### Window Manager info <a name="window-manager-info"/></a>
+### Window Manager info
 ```rust
 use libwmctl::prelude::*;
 
@@ -83,50 +82,66 @@ fn main() {
     println!("Screen Size:       {}x{}", wmctl.width(), wmctl.height());
     println!("Desktops:          {}", wmctl.desktops().unwrap());
     println!();
-    println!("Active Window");
-    println!("{:-<120}", "");
 
-    println!("{:<8} {:<3} {:<6} {:<5} {:<5} {:<4} {:<4} {:<8} {:<7} {:<18} {:<18} {}", "ID", "DSK", "PID", "X", "Y", "W", "H", "BORDERS", "TYPE", "STATE", "CLASS", "NAME");
+    println!("Active Window");
+    let mut table = Table::new();
+    table.add_row(Row::new(vec![
+        Cell::new("ID"),
+        Cell::new("DSK"),
+        Cell::new("PID"),
+        Cell::new("X"),
+        Cell::new("Y"),
+        Cell::new("W"),
+        Cell::new("H"),
+        Cell::new("BORDERS"),
+        Cell::new("TYPE"),
+        Cell::new("STATE"),
+        Cell::new("CLASS"),
+        Cell::new("NAME"),
+    ]));
 
     let pid = wmctl.win_pid(win).unwrap_or(-1);
     let desktop = wmctl.win_desktop(win).unwrap_or(-1);
     let typ = wmctl.win_type(win).unwrap_or(WinType::Invalid);
     let states = wmctl.win_state(win).unwrap_or(vec![WinState::Invalid]);
-    let (x, y, w, h) = wmctl.win_geometry(win).unwrap_or((0,0,0,0));
+    let (x, y, w, h) = wmctl.win_geometry(win).unwrap_or((0, 0, 0, 0));
     let (l, r, t, b) = wmctl.win_borders(win).unwrap_or((0, 0, 0, 0));
     let class = wmctl.win_class(win).unwrap_or("".to_owned());
     let name = wmctl.win_name(win).unwrap_or("".to_owned());
-    println!("{:<8} {:<3} {:<6} {:<5} {:<5} {:<4} {:<4} {:<8} {:<7} {:<18} {:<18} {}",
-        format!("{:0>8}", win), format!("{:>2}", desktop), pid,
-        format!("{:<4}", x), format!("{:<4}", y), format!("{:<4}", w), format!("{:<4}", h), 
-        format!("{},{},{},{}", l, r, t, b),
-        typ.to_string(), format!("{:?}", states), class, name);
+    table.add_row(Row::new(vec![
+        Cell::new(&win.to_string()),
+        Cell::new(&format!("{:>2}", desktop)),
+        Cell::new(&pid.to_string()),
+        Cell::new(&x.to_string()),
+        Cell::new(&y.to_string()),
+        Cell::new(&w.to_string()),
+        Cell::new(&h.to_string()),
+        Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
+        Cell::new(&typ.to_string()),
+        Cell::new(&format!("{:?}", states)),
+        Cell::new(&class),
+        Cell::new(&name),
+    ]));
+    table.printstd();
 }
 ```
 
-## Contribute <a name="Contribute"/></a>
+## Contribute
 Pull requests are always welcome. However understand that they will be evaluated purely on whether
 or not the change fits with my goals/ideals for the project.
 
-### Git-Hook <a name="git-hook"/></a>
-Enable the git hooks to have automatic version increments
-```bash
-cd ~/Projects/wmctl
-git config core.hooksPath .githooks
-```
-
-## License <a name="license"/></a>
+## License
 This project is licensed under either of:
  * MIT license [LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT
  * Apache License, Version 2.0 [LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0
 
-### Contribution <a name="contribution"/></a>
+### Contribution
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
 this project by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without
 any additional terms or conditions.
 
 ---
 
-## Backlog <a name="backlog"/></a>
+## Backlog
 
-## Changelog <a name="changelog"/></a>
+## Changelog
