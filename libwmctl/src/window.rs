@@ -392,7 +392,10 @@ impl Window {
     /// win.shape(Shape::Large).pos(Position::Right).place();
     /// ```
     pub fn place(&self) -> WmCtlResult<()> {
-        let execute = self.shape.is_some() || self.pos.is_some();
+        if self.shape.is_none() && self.pos.is_none() {
+            return Ok(());
+        }
+        let wm = WMCTL().read().unwrap();
 
         // Get window properties
         let (bl, br, bt, bb) = self.borders()?;
@@ -414,22 +417,16 @@ impl Window {
         //     (None, None, None)
         // };
 
-        // // Position the window if directed
-        // let (x, y) = if let Some(pos) = self.pos {
-        //     self.calc_pos(sw.unwrap_or(w), sh.unwrap_or(h), bl + br, bt + bb, pos)?
-        // } else if self.x.is_some() && self.y.is_some() {
-        //     (self.x, self.y)
-        // } else {
-        //     (None, None)
-        // };
+        // Position the window if directed
+        let (x, y) = if let Some(pos) = &self.pos {
+            translate_pos(w, h, bl + br, bt + bb, wm.work_width, wm.work_height, pos)?
+        } else {
+            (None, None)
+        };
 
         // Execute if reason to
-        if execute {
-            //self.move_resize(gravity, x, y, sw, sh)
-            Ok(())
-        } else {
-            Ok(())
-        }
+        //self.move_resize(gravity, x, y, sw, sh)
+        self.move_resize(None, x, y, None, None)
     }
 
     /// Move and resize
@@ -595,7 +592,7 @@ impl Window {
 /// ### Returns
 /// * `(x, y)`` cordinates
 fn translate_pos(
-    w: u32, h: u32, bw: u32, bh: u32, aw: u32, ah: u32, pos: Position,
+    w: u32, h: u32, bw: u32, bh: u32, aw: u32, ah: u32, pos: &Position,
 ) -> WmCtlResult<(Option<u32>, Option<u32>)> {
     //self.unmaximize()?;
 
@@ -651,11 +648,122 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_translate_pos_bottomcenter() {
+        // No borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::BottomCenter)
+                .unwrap();
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        let ty = (ah - h - bh) as u32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(ty));
+
+        // With borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::BottomCenter)
+                .unwrap();
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        let ty = (ah - h - bh) as u32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(ty));
+    }
+
+    #[test]
+    fn test_translate_pos_topcenter() {
+        // No borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::TopCenter)
+                .unwrap();
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(0));
+
+        // With borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::TopCenter)
+                .unwrap();
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(0));
+    }
+
+    #[test]
+    fn test_translate_pos_rightcenter() {
+        // No borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::RightCenter)
+                .unwrap();
+        let lx = (aw - w - bw) as u32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(cy));
+
+        // With borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::RightCenter)
+                .unwrap();
+        let lx = (aw - w - bw) as u32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(cy));
+    }
+
+    #[test]
+    fn test_translate_pos_leftcenter() {
+        // No borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::LeftCenter)
+                .unwrap();
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        assert_eq!(x, Some(0));
+        assert_eq!(y, Some(cy));
+
+        // With borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::LeftCenter)
+                .unwrap();
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        assert_eq!(x, Some(0));
+        assert_eq!(y, Some(cy));
+    }
+
+    #[test]
+    fn test_translate_pos_bottomright() {
+        // No borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::BottomRight)
+                .unwrap();
+        let lx = (aw - w - bw) as u32;
+        let ty = (ah - h - bh) as u32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(ty));
+
+        // With borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        let (x, y) =
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::BottomRight)
+                .unwrap();
+        let lx = (aw - w - bw) as u32;
+        let ty = (ah - h - bh) as u32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(ty));
+    }
+
+    #[test]
     fn test_translate_pos_bottomleft() {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::BottomLeft)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::BottomLeft)
                 .unwrap();
         let ty = (ah - h - bh) as u32;
         assert_eq!(x, Some(0));
@@ -664,7 +772,7 @@ mod tests {
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::BottomLeft)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::BottomLeft)
                 .unwrap();
         let ty = (ah - h - bh) as u32;
         assert_eq!(x, Some(0));
@@ -676,7 +784,7 @@ mod tests {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::TopRight)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::TopRight)
                 .unwrap();
         let lx = (aw - w - bw) as u32;
         assert_eq!(x, Some(lx));
@@ -685,7 +793,7 @@ mod tests {
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::TopRight)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::TopRight)
                 .unwrap();
         let lx = (aw - w - bw) as u32;
         assert_eq!(x, Some(lx));
@@ -697,7 +805,7 @@ mod tests {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::TopLeft)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::TopLeft)
                 .unwrap();
         assert_eq!(x, Some(0));
         assert_eq!(y, Some(0));
@@ -705,7 +813,7 @@ mod tests {
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::TopLeft)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::TopLeft)
                 .unwrap();
         assert_eq!(x, Some(0));
         assert_eq!(y, Some(0));
@@ -716,7 +824,7 @@ mod tests {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Bottom)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Bottom)
                 .unwrap();
         let ty = (ah - h - bh) as u32;
         assert_eq!(x, None);
@@ -725,7 +833,7 @@ mod tests {
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Bottom)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Bottom)
                 .unwrap();
         let ty = (ah - h - bh) as u32;
         assert_eq!(x, None);
@@ -737,14 +845,14 @@ mod tests {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Top).unwrap();
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Top).unwrap();
         assert_eq!(x, None);
         assert_eq!(y, Some(0));
 
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Top).unwrap();
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Top).unwrap();
         assert_eq!(x, None);
         assert_eq!(y, Some(0));
     }
@@ -754,7 +862,7 @@ mod tests {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Right)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Right)
                 .unwrap();
         let lx = (aw - w - bw) as u32;
         assert_eq!(x, Some(lx));
@@ -763,7 +871,7 @@ mod tests {
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Right)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Right)
                 .unwrap();
         let lx = (aw - w - bw) as u32;
         assert_eq!(x, Some(lx));
@@ -775,14 +883,16 @@ mod tests {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Left).unwrap();
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Left)
+                .unwrap();
         assert_eq!(x, Some(0));
         assert_eq!(y, None);
 
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Left).unwrap();
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Left)
+                .unwrap();
         assert_eq!(x, Some(0));
         assert_eq!(y, None);
     }
@@ -792,17 +902,21 @@ mod tests {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Center)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Center)
                 .unwrap();
-        assert_eq!(x, Some((aw / 2.0 - (w + bw) / 2.0) as u32));
-        assert_eq!(y, Some((ah / 2.0 - (h + bh) / 2.0) as u32));
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(cy));
 
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) =
-            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, Position::Center)
+            translate_pos(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Position::Center)
                 .unwrap();
-        assert_eq!(x, Some((aw / 2.0 - (w + bw) / 2.0) as u32));
-        assert_eq!(y, Some((ah / 2.0 - (h + bh) / 2.0) as u32));
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(cy));
     }
 }

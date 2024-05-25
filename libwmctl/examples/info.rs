@@ -49,4 +49,6 @@ fn main() {
         Cell::new(&win.name().unwrap_or("".to_owned())),
     ]));
     table.printstd();
+
+    //win.pos(Position::TopCenter).place().unwrap();
 }
