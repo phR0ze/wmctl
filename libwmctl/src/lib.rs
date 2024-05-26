@@ -1,7 +1,8 @@
-//! `libwmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
-//! as a way to integrate with EWMH compatible window managers. The EWHM spec builds on the lower
-//! level Inter Client Communication Conventions Manual (ICCCM) to define interactions between
-//! window managers, compositing managers and applications.
+//! `libwmctl` implements a subset of the [Extended Window Manager Hints (EWMH)
+//! specification](https://specifications.freedesktop.org/wm-spec/latest/) as a way to integrate
+//! with EWMH compatible window managers. The EWHM spec builds on the lower level Inter Client
+//! Communication Conventions Manual (ICCCM) to define interactions between window managers,
+//! compositing managers and applications.
 //!
 //! [Root Window Properties](https://specifications.freedesktop.org/wm-spec/latest/ar01s03.html)  
 //! The EWMH spec defines a number of properties that EWHM compliant window managers will maintain
@@ -10,7 +11,8 @@
 //!
 //! `wmctl` uses `libwmctl` with pre-defined shapes and positions to manipulate how a window should
 //! be shaped and positioned on the screen in an ergonomic way; however `libwmctl` could be used
-//! for a variety of reasons.
+//! for a variety of use cases separate from wmctl.
+
 mod atoms;
 mod error;
 mod model;

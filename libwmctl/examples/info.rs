@@ -15,6 +15,9 @@ fn main() {
     println!("Desktops:       {}", wm.desktops);
     println!();
 
+    win.unmaximize().unwrap();
+    println!("Maximized: {}", win.maximized());
+
     println!("Active Window");
     let mut table = Table::new();
     table.add_row(Row::new(vec![
@@ -49,6 +52,5 @@ fn main() {
         Cell::new(&win.name().unwrap_or("".to_owned())),
     ]));
     table.printstd();
-
     //win.pos(Position::TopCenter).place().unwrap();
 }

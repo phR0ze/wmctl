@@ -2,5 +2,6 @@ use libwmctl::prelude::*;
 
 // Move the active window
 fn main() {
-    WinOpt::new(None).pos(Position::Left).place().unwrap();
+    // Position the active window on the left
+    window(None).pos(Position::Left).place().unwrap();
 }

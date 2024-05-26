@@ -45,12 +45,16 @@ pub struct WinMgr {
     pub desktops: u32,
 }
 /// WinGravity
+/// When windows are resized, subwindows may be repositioned automatically relative to some position
+/// in the window. This attraction of a subwindow to some part of its parent is known as window
+/// gravity.
+///
 /// Gravity is defined as the lower byte of the move resize flags 32bit value
 /// <https://tronche.com/gui/x/xlib/window/attributes/gravity.html>
 #[derive(Debug, Clone, PartialEq)]
 pub enum WinGravity {
+    Unmap,
     Center,
-    None,
 }
 
 // Implement format! support
@@ -66,7 +70,7 @@ impl From<u32> for WinGravity {
     fn from(val: u32) -> Self {
         match val {
             5 => WinGravity::Center,
-            _ => WinGravity::None,
+            _ => WinGravity::Unmap,
         }
     }
 }
@@ -75,6 +79,7 @@ impl From<WinGravity> for u32 {
     fn from(val: WinGravity) -> Self {
         match val {
             WinGravity::Center => 5,
+            WinGravity::Unmap => 0,
             _ => 0,
         }
     }
@@ -97,6 +102,7 @@ pub enum Position {
     RightCenter,
     TopCenter,
     BottomCenter,
+    Static(u32, u32),
 }
 
 // Implement format! support
@@ -144,7 +150,7 @@ impl convert::TryFrom<String> for Position {
 /// WinShape provides a number of pre-defined shapes to manipulate the window into, taking into
 /// account borders and taskbars automatically.
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinShape {
+pub enum Shape {
     Grow,
     Max,
     Halfw,
@@ -155,10 +161,11 @@ pub enum WinShape {
     Shrink,
     Square,
     UnMax,
+    Static(u32, u32),
 }
 
 // Implement format! support
-impl fmt::Display for WinShape {
+impl fmt::Display for Shape {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
@@ -167,31 +174,31 @@ impl fmt::Display for WinShape {
 }
 
 // Convert from &str to Shape
-impl convert::TryFrom<&str> for WinShape {
+impl convert::TryFrom<&str> for Shape {
     type Error = WmCtlError;
 
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val.to_lowercase().as_ref() {
-            "grow" => Ok(WinShape::Grow),
-            "max" => Ok(WinShape::Max),
-            "halfw" => Ok(WinShape::Halfw),
-            "halfh" => Ok(WinShape::Halfh),
-            "small" => Ok(WinShape::Small),
-            "medium" => Ok(WinShape::Medium),
-            "large" => Ok(WinShape::Large),
-            "shrink" => Ok(WinShape::Shrink),
-            "unmax" => Ok(WinShape::UnMax),
+            "grow" => Ok(Shape::Grow),
+            "max" => Ok(Shape::Max),
+            "halfw" => Ok(Shape::Halfw),
+            "halfh" => Ok(Shape::Halfh),
+            "small" => Ok(Shape::Small),
+            "medium" => Ok(Shape::Medium),
+            "large" => Ok(Shape::Large),
+            "shrink" => Ok(Shape::Shrink),
+            "unmax" => Ok(Shape::UnMax),
             _ => Err(WmCtlError::InvalidWinShape(val.to_string()).into()),
         }
     }
 }
 
 // Convert from a String to a Shape
-impl convert::TryFrom<String> for WinShape {
+impl convert::TryFrom<String> for Shape {
     type Error = WmCtlError;
 
     fn try_from(val: String) -> Result<Self, Self::Error> {
-        WinShape::try_from(val.as_str())
+        Shape::try_from(val.as_str())
     }
 }
 

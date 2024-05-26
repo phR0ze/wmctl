@@ -2,5 +2,5 @@ use libwmctl::prelude::*;
 
 // Explicit resize of the active window
 fn main() {
-    WinOpt::new(None).size(1200, 800).location(0, 0).place().unwrap();
+    window(None).shape(Shape::Static(1200, 800)).pos(Position::Static(100, 100)).place().unwrap();
 }

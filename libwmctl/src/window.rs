@@ -10,7 +10,7 @@ pub struct Window {
     pub id: u32,
 
     // Directives
-    shape: Option<WinShape>,
+    shape: Option<Shape>,
     pos: Option<Position>,
 }
 
@@ -298,7 +298,7 @@ impl Window {
         Ok((l, r, t, b))
     }
 
-    /// Maximize the window both horizontally and vertiacally
+    /// Maximize the window both horizontally and vertically
     ///
     /// ### Examples
     /// ```ignore
@@ -323,6 +323,18 @@ impl Window {
         ))?;
         debug!("maximize: id: {}", self.id);
         Ok(())
+    }
+
+    /// Check if the window has a horizontally or vertically maximized
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// win.maximized()
+    /// ```
+    pub fn maximized(&self) -> bool {
+        self.state().is_ok_and(|states| states.contains(&WinState::MaxVert) || states.contains(&WinState::MaxHorz))
     }
 
     /// Remove the MaxVert and MaxHorz states
@@ -362,7 +374,7 @@ impl Window {
     /// use libwmctl::prelude::*;
     /// window(12345).shape(WinShape::Large).place().unwrap();
     /// ```
-    pub fn shape(mut self, shape: WinShape) -> Self {
+    pub fn shape(mut self, shape: Shape) -> Self {
         self.shape = Some(shape);
         self
     }
@@ -397,25 +409,28 @@ impl Window {
         }
         let wm = WMCTL().read().unwrap();
 
+        // Unmaximize to shape and position the window correctly
+        //self.unmaximize()?;
+
         // Get window properties
         let (bl, br, bt, bb) = self.borders()?;
         let (_, _, w, h) = self.geometry()?;
 
-        // // Shape the window as directed
-        // let (gravity, sw, sh) = if let Some(_shape) = self.shape {
-        //     let (gravity, sw, sh) = self.calc_shape(w, h, bl + br, bt + bb, _shape)?;
+        // Shape the window as directed
+        let (gravity, sw, sh) = if let Some(_shape) = self.shape {
+            let (gravity, sw, sh) = translate_shape(w, h, bl + br, bt + bb, _shape)?;
 
-        //     // Don't use gravity if positioning is required
-        //     if self.pos.is_some() || self.x.is_some() || self.y.is_some() {
-        //         (None, sw, sh)
-        //     } else {
-        //         (gravity, sw, sh)
-        //     }
-        // } else if self.w.is_some() && self.h.is_some() {
-        //     (None, Some(self.w.unwrap()), Some(self.h.unwrap()))
-        // } else {
-        //     (None, None, None)
-        // };
+            // Don't use gravity if positioning is required
+            if self.pos.is_some() || self.x.is_some() || self.y.is_some() {
+                (None, sw, sh)
+            } else {
+                (gravity, sw, sh)
+            }
+        } else if self.w.is_some() && self.h.is_some() {
+            (None, Some(self.w.unwrap()), Some(self.h.unwrap()))
+        } else {
+            (None, None, None)
+        };
 
         // Position the window if directed
         let (x, y) = if let Some(pos) = &self.pos {
@@ -425,8 +440,7 @@ impl Window {
         };
 
         // Execute if reason to
-        //self.move_resize(gravity, x, y, sw, sh)
-        self.move_resize(None, x, y, None, None)
+        self.move_resize(gravity, x, y, sw, sh)
     }
 
     /// Move and resize
@@ -483,102 +497,10 @@ impl Window {
         debug!("move_resize: id: {}, g: {:?}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", self.id, gravity, x, y, w, h);
         Ok(())
     }
-
-    /// Shape the given window
-    fn calc_shape(
-        &self, w: u32, h: u32, bw: u32, bh: u32, shape: WinShape,
-    ) -> WmCtlResult<(Option<u32>, Option<u32>, Option<u32>)> {
-        let wm = WMCTL().read().unwrap();
-
-        // Notes
-        // * return values from this func should not include the border sizes
-        Ok(match shape {
-            WinShape::Max => {
-                self.maximize()?;
-                (None, None, None)
-            },
-            WinShape::UnMax => {
-                self.unmaximize()?;
-                (None, None, None)
-            },
-            _ => {
-                self.unmaximize()?;
-
-                // Pre-calculations
-                let fw = wm.work_width - bw; // total width - border
-                let fh = wm.work_height - bh; // total height - border
-                let hw = wm.work_width / 2 - bw; // total half width - border
-                let hh = wm.work_height / 2 - bh; // total half height - border
-
-                let (w, h) = match shape {
-                    // Grow the existing dimensions by 1% until full size
-                    WinShape::Grow => {
-                        let mut w = ((w - bw) as f32 * 1.01) as u32 + bw;
-                        if w >= fw {
-                            w = fw
-                        }
-                        let mut h = ((h - bh) as f32 * 1.01) as u32 + bh;
-                        if h >= fh {
-                            h = fh
-                        }
-                        (Some(w), Some(h))
-                    },
-
-                    // Half width x full height
-                    WinShape::Halfw => (Some(hw), Some(fh)),
-
-                    // Full width x half height
-                    WinShape::Halfh => (Some(fw), Some(hh)),
-
-                    // Half width x half height
-                    WinShape::Small => (Some(hw), Some(hh)),
-
-                    // 3/4 short side x 4x3 sized long size
-                    WinShape::Medium => {
-                        let (w, h) = if wm.work_height < wm.work_width {
-                            let h = fh as f32 * 0.75;
-                            ((h * 4.0 / 3.0) as u32, h as u32)
-                        } else {
-                            let w = fw as f32 * 0.75;
-                            (w as u32, (w * 4.0 / 3.0) as u32)
-                        };
-                        (Some(w), Some(h))
-                    },
-
-                    // Full short side x 4x3 sized long size
-                    WinShape::Large => {
-                        let (w, h) = if wm.work_height < wm.work_width {
-                            ((fh as f32 * 4.0 / 3.0) as u32, fh)
-                        } else {
-                            (fw, (fw as f32 * 4.0 / 3.0) as u32)
-                        };
-                        (Some(w), Some(h))
-                    },
-
-                    // Shrink the existing dimensions by 1% down to no smaller than 100x100
-                    WinShape::Shrink => {
-                        // Remove the border before calculations are done then re-include
-                        let mut w = (w - bw) as f32 * 0.99;
-                        if w < 100.0 {
-                            w = 100.0
-                        }
-                        let mut h = (h - bh) as f32 * 0.99;
-                        if h < 100.0 {
-                            h = 100.0
-                        }
-                        (Some(w as u32 + bw), Some(h as u32 + bh))
-                    },
-
-                    // Don't change anything by default
-                    _ => (None, None),
-                };
-                (Some(WinGravity::Center.into()), w, h)
-            },
-        })
-    }
 }
 
-/// Translate position enum values into x, y cordinates.
+/// Translate position enum values into (x, y) cordinates but takes no direct action on the window.
+/// Window should already be unmaximized before calling this function.
 ///
 /// ### Arguments
 /// * `w` - Window's current width
@@ -590,12 +512,10 @@ impl Window {
 /// * `pos` - Position to translate
 ///
 /// ### Returns
-/// * `(x, y)`` cordinates
+/// * `(x, y)` cordinates or (None, None) for no change
 fn translate_pos(
     w: u32, h: u32, bw: u32, bh: u32, aw: u32, ah: u32, pos: &Position,
 ) -> WmCtlResult<(Option<u32>, Option<u32>)> {
-    //self.unmaximize()?;
-
     // Pre-calculating some commonly used values for the translation
 
     // x center coordinate for left of window such that the window will appear horizontally centered
@@ -640,12 +560,135 @@ fn translate_pos(
         Position::RightCenter => (Some(lx), Some(cy)),
         Position::TopCenter => (Some(cx), Some(0)),
         Position::BottomCenter => (Some(cx), Some(ty)),
+        Position::Static(x, y) => (Some(*x), Some(*y)),
+    })
+}
+
+/// Translate the given shape into a new window (w, h) size to be applied to the window but takes
+/// no direction action on the window. Window should already be unmaximized before calling this.
+///
+/// ### Arguments
+/// * `w` - Window's current width
+/// * `h` - Window's current height
+/// * `bw` - Window's border width
+/// * `bh` - Window's border height
+/// * `aw` - Window manager's work area width
+/// * `ah` - Window manager's work area height
+/// * `pos` - Position to translate
+///
+/// ### Returns
+/// * `(g, w, h)` size, or (None, 0, 0) for maximize, or (None, None, None) for no change
+fn translate_shape(
+    w: u32, h: u32, bw: u32, bh: u32, aw: u32, ah: u32, shape: &Shape,
+) -> WmCtlResult<(Option<u32>, Option<u32>, Option<u32>)> {
+    Ok(match shape {
+        Shape::Max => (None, Some(0), Some(0)),
+        Shape::UnMax => (None, None, None),
+        _ => {
+            // Pre-calculations
+            // * return values from this function should NOT include the border sizes
+            let fw = aw - bw; // full width = total width - border
+            let fh = ah - bh; // full height = total height - border
+            let hw = (aw as f32 / 2.0) as u32 - bw; // half width = total width - border
+            let hh = (ah as f32 / 2.0) as u32 - bh; // half height = total height - border
+
+            let (g, w, h) = match shape {
+                // Grow the existing dimensions by 1% until full size
+                Shape::Grow => {
+                    // Remove the border before calculations are done
+                    let mut w = ((w - bw) as f32 * 1.01) as u32 + bw;
+                    if w >= fw {
+                        w = fw
+                    }
+                    let mut h = ((h - bh) as f32 * 1.01) as u32 + bh;
+                    if h >= fh {
+                        h = fh
+                    }
+                    (Some(WinGravity::Center.into()), Some(w), Some(h))
+                },
+
+                // Half width x full height
+                Shape::Halfw => (None, Some(hw), Some(fh)),
+
+                // Full width x half height
+                Shape::Halfh => (None, Some(fw), Some(hh)),
+
+                // Half width x half height
+                Shape::Small => (None, Some(hw), Some(hh)),
+
+                // 3/4 short side x 4x3 sized long size
+                Shape::Medium => {
+                    let (w, h) = if ah < aw {
+                        let h = fh as f32 * 0.75;
+                        ((h * 4.0 / 3.0) as u32, h as u32)
+                    } else {
+                        let w = fw as f32 * 0.75;
+                        (w as u32, (w * 4.0 / 3.0) as u32)
+                    };
+                    (None, Some(w), Some(h))
+                },
+
+                // Full short side x 4x3 sized long size
+                Shape::Large => {
+                    let (w, h) = if ah < aw {
+                        ((fh as f32 * 4.0 / 3.0) as u32, fh)
+                    } else {
+                        (fw, (fw as f32 * 4.0 / 3.0) as u32)
+                    };
+                    (None, Some(w), Some(h))
+                },
+
+                // Shrink the existing dimensions by 1% down to no smaller than 100x100
+                Shape::Shrink => {
+                    // Remove the border before calculations are done
+                    let mut w = (w - bw) as f32 * 0.99;
+                    if w < 100.0 {
+                        w = 100.0
+                    }
+                    let mut h = (h - bh) as f32 * 0.99;
+                    if h < 100.0 {
+                        h = 100.0
+                    }
+                    (Some(WinGravity::Center.into()), Some(w as u32 + bw), Some(h as u32 + bh))
+                },
+
+                // Use the static size provided
+                Shape::Static(w, h) => (None, Some(*w), Some(*h)),
+
+                // Don't change anything by default
+                _ => (None, None, None),
+            };
+            (g, w, h)
+        },
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_translate_shape_halfw() {
+        // No borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (g, _x, _y) =
+            translate_shape(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Shape::Halfw)
+                .unwrap();
+        let hw = (aw / 2.0) as u32;
+        let fh = (ah) as u32;
+        assert_eq!(_x, Some(hw));
+        assert_eq!(_y, Some(fh));
+
+        // With borders
+        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        let (g, _x, _y) =
+            translate_shape(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Shape::Halfw)
+                .unwrap();
+        let hw = (aw / 2.0) as u32;
+        let fh = (ah) as u32;
+        assert_eq!(_x, Some(hw));
+        assert_eq!(_y, Some(fh));
+    }
 
     #[test]
     fn test_translate_pos_bottomcenter() {
