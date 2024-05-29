@@ -81,7 +81,6 @@ impl From<WinGravity> for u32 {
         match val {
             WinGravity::Center => 5,
             WinGravity::Unmap => 0,
-            _ => 0,
         }
     }
 }

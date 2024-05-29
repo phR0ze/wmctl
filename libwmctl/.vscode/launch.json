@@ -1,0 +1,249 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'libwmctl'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "libwmctl",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'position'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=position",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "position",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'position'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=position",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "position",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'info'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=info",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "info",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'info'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=info",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "info",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'static'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=static",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "static",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'static'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=static",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "static",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'shape'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=shape",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "shape",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'shape'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=shape",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "shape",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'place'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=place",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "place",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'place'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=place",
+                    "--package=libwmctl"
+                ],
+                "filter": {
+                    "name": "place",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'wmctl'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=wmctl",
+                    "--package=wmctl"
+                ],
+                "filter": {
+                    "name": "wmctl",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'wmctl'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=wmctl",
+                    "--package=wmctl"
+                ],
+                "filter": {
+                    "name": "wmctl",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

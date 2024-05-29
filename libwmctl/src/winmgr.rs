@@ -1,18 +1,5 @@
-//! `WmCtl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
-//! as a way to integrate with EWMH compatible window managers. The EWHM spec builds on the lower
-//! level Inter Client Communication Conventions Manual (ICCCM) to define interactions between
-//! window managers, compositing managers and applications.
-//!
-//! [Root Window Properties](https://specifications.freedesktop.org/wm-spec/latest/ar01s03.html)  
-//! The EWMH spec defines a number of properties that EWHM compliant window managers will maintain
-//! and return to clients requesting information. `WmCtl` taps into the message queue to retrieve
-//! details about a given window and to than manipulate the given window as desired.
-//!
-//! `wmctl` uses `WmCtl` with pre-defined shapes and positions to manipulate how a window should
-//! be shaped and positioned on the screen in an ergonomic way; however `WmCtl` could be used
-//! for a variety of reasons.
 use crate::{atoms::*, model::*, WmCtlError, WmCtlResult};
-use std::{collections::HashMap, str, sync::Arc};
+use std::{collections::HashMap, str};
 use tracing::{debug, trace};
 
 use x11rb::{
@@ -21,8 +8,7 @@ use x11rb::{
     rust_connection::RustConnection,
 };
 
-/// Window Manager control implements the EWMH protocol using x11rb to provide a simplified access
-/// layer to EWHM compatible window managers.
+/// Window Manager provides a higher level interface to the underlying EWHM compatible window manager
 pub(crate) struct WinMgr {
     pub(crate) conn: RustConnection, // x11 connection
     pub atoms: AtomCollection,       // atom cache
@@ -135,38 +121,6 @@ impl WinMgr {
         Ok(win)
     }
 
-    /// Send the event ensuring that a flush is called and that the message was precisely
-    /// executed in the case of a resize/move.
-    ///
-    /// ### Arguments
-    /// * `msg` - the client message event to send
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// let flags = MOVE_RESIZE_WINDOW_WIDTH | MOVE_RESIZE_WINDOW_HEIGHT;
-    /// wmctl.send_event(ClientMessageEvent::new(32, win, wmctl.atoms._NET_MOVERESIZE_WINDOW,
-    ///     [flags, 0, 0, 500, 500])).unwrap();
-    /// ```
-    pub(crate) fn send_event(&self, msg: ClientMessageEvent) -> WmCtlResult<()> {
-        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
-        self.conn.send_event(false, self.root, mask, &msg)?.check()?;
-        self.conn.flush()?;
-        debug!("send_event: win: {}", msg.window);
-
-        // I've found that Xfwm4 does not precisely resize a window on the first request. It may be
-        // this is a function of decorating the window during a redraw. At any rate because of this
-        // unfortunate shortcoming we have to send the event a second time.
-        if msg.type_ == self.atoms._NET_MOVERESIZE_WINDOW {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            self.conn.send_event(false, self.root, mask, &msg)?.check()?;
-            self.conn.flush()?;
-            debug!("send_event: win: {}", msg.window);
-        }
-        Ok(())
-    }
-
     /// Determine if the given function is supported by the window manager
     ///
     /// ### Arguments
@@ -214,6 +168,377 @@ impl WinMgr {
         }
         Ok(windows)
     }
+
+    /// Get window pid
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().window_pid(self.id)
+    /// ```
+    pub(crate) fn window_pid(&self, id: u32) -> WmCtlResult<i32> {
+        // Defined as: _NET_WM_PID, CARDINAL/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_PID`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+        // retrieve the values of which there will be a single value.
+        let reply =
+            self.conn.get_property(false, id, self.atoms._NET_WM_PID, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        let pid = reply
+            .value32()
+            .and_then(|mut x| x.next())
+            .ok_or(WmCtlError::PropertyNotFound("_NET_WM_PID".to_owned()))?;
+        debug!("win_pid: id: {}, pid: {:?}", id, pid);
+        Ok(pid as i32)
+    }
+
+    /// Get window name
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().window_name(self.id)
+    /// ```
+    pub(crate) fn window_name(&self, id: u32) -> WmCtlResult<String> {
+        // Defined as: _NET_WM_NAME, UTF8_STRING
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_NAME`
+        // request message with a `AtomEnum::UTF8_STRING` type response and we can use the `reply.value` accessor to
+        // retrieve the value.
+
+        // First try the _NET_WM_VISIBLE_NAME
+        let reply = self
+            .conn
+            .get_property(false, id, self.atoms._NET_WM_VISIBLE_NAME, self.atoms.UTF8_STRING, 0, u32::MAX)?
+            .reply()?;
+        if reply.type_ != x11rb::NONE {
+            if let Ok(value) = str::from_utf8(&reply.value) {
+                if value != "" {
+                    debug!("win_name: using _NET_WM_VISIBLE_NAME for: {}", value);
+                    return Ok(value.to_owned());
+                }
+            }
+        }
+
+        // Next try the _NET_WM_NAME
+        let reply = self
+            .conn
+            .get_property(false, id, self.atoms._NET_WM_NAME, self.atoms.UTF8_STRING, 0, u32::MAX)?
+            .reply()?;
+        if reply.type_ != x11rb::NONE {
+            if let Ok(value) = str::from_utf8(&reply.value) {
+                if value != "" {
+                    debug!("win_name: using _NET_WM_NAME for: {}", value);
+                    return Ok(value.to_owned());
+                }
+            }
+        }
+
+        // Fall back on the WM_NAME
+        let reply =
+            self.conn.get_property(false, id, AtomEnum::WM_NAME, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
+        if reply.type_ != x11rb::NONE {
+            if let Ok(value) = str::from_utf8(&reply.value) {
+                if value != "" {
+                    debug!("win_name: using WM_NAME for: {}", value);
+                    return Ok(value.to_owned());
+                }
+            }
+        }
+
+        // No valid name was found
+        Err(WmCtlError::PropertyNotFound("_NET_WM_NAME | _WM_NAME".to_owned()).into())
+    }
+
+    /// Get window class which is typically the the application's name
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().window_class(self.id)
+    /// ```
+    pub(crate) fn window_class(&self, id: u32) -> WmCtlResult<String> {
+        let reply =
+            self.conn.get_property(false, id, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
+
+        // Skip the first null terminated string and extract the second
+        let iter = reply.value.into_iter().skip_while(|x| *x != 0).skip(1).take_while(|x| *x != 0);
+
+        // Extract the second null terminated string
+        let class = str::from_utf8(&iter.collect::<Vec<_>>())?.to_owned();
+        debug!("win_class: id: {}, class: {}", id, class);
+        Ok(class)
+    }
+
+    /// Get window kind
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().window_kind(self.id)
+    /// ```
+    pub(crate) fn window_kind(&self, id: u32) -> WmCtlResult<WinKind> {
+        // Defined as: _NET_WM_WINDOW_TYPE, ATOM[]/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_WINDOW_TYPE`
+        // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
+        // retrieve the value.
+        let reply = self
+            .conn
+            .get_property(false, id, self.atoms._NET_WM_WINDOW_TYPE, AtomEnum::ATOM, 0, u32::MAX)?
+            .reply()?;
+        let typ = reply
+            .value32()
+            .and_then(|mut x| x.next())
+            .ok_or(WmCtlError::PropertyNotFound("_NET_WM_WINDOW_TYPE".to_owned()))?;
+        let _kind = WinKind::from(&self.atoms, typ)?;
+        debug!("win_kind: id: {}, kind: {:?}", id, _kind);
+        Ok(_kind)
+    }
+
+    /// Get window state
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().window_state(self.id)
+    /// ```
+    pub(crate) fn window_state(&self, id: u32) -> WmCtlResult<Vec<WinState>> {
+        // Defined as: _NET_WM_STATE, ATOM[]
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_STATE`
+        // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
+        // retrieve the values of which there will be a single value.
+        let mut states = vec![];
+        let reply =
+            self.conn.get_property(false, id, self.atoms._NET_WM_STATE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+        for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
+            let state = WinState::from(&self.atoms, state)?;
+            debug!("win_state: id: {}, state: {}", id, state);
+            states.push(state);
+        }
+        Ok(states)
+    }
+
+    /// Get window parent
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().window_parent(self.id)
+    /// ```
+    #[allow(dead_code)]
+    pub(crate) fn window_parent(&self, id: u32) -> WmCtlResult<crate::Window> {
+        let tree = self.conn.query_tree(id)?.reply()?;
+        let parent_id = tree.parent;
+        debug!("win_parent: id: {}, parent: {:?}", id, parent_id);
+        Ok(crate::Window::new(parent_id))
+    }
+
+    /// Get window desktop
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().window_desktop(self.id)
+    /// ```
+    pub(crate) fn window_desktop(&self, id: u32) -> WmCtlResult<i32> {
+        // Defined as: _NET_WM_DESKTOP desktop, CARDINAL/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_DESKTOP`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+        // retrieve the values of which there will be a single value.
+        let reply = self
+            .conn
+            .get_property(false, id, self.atoms._NET_WM_DESKTOP, AtomEnum::CARDINAL, 0, u32::MAX)?
+            .reply()?;
+        let desktop = reply
+            .value32()
+            .and_then(|mut x| x.next())
+            .ok_or(WmCtlError::PropertyNotFound("_NET_WM_DESKTOP".to_owned()))?;
+        debug!("win_desktop: id: {}, desktop: {}", id, desktop);
+        Ok(desktop as i32)
+    }
+
+    /// Get window geometry
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// let (x, y, w, h) = WM().read().unwrap().window_geometry(self.id).unwrap()
+    /// ```
+    pub(crate) fn window_geometry(&self, id: u32) -> WmCtlResult<(i32, i32, u32, u32)> {
+        // The returned x, y location is relative to its parent window making the values completely
+        // useless. However using `translate_coordinates` we can have the window manager map those
+        // useless values into real world cordinates by passing it the root as the relative window.
+
+        // Get width and heith and useless relative location values
+        let g = self.conn.get_geometry(id)?.reply()?;
+
+        // Translate the useless retative location values to to real world values
+        let t = self.conn.translate_coordinates(id, self.root, g.x, g.y)?.reply()?;
+
+        let (x, y, w, h) = (t.dst_x, t.dst_y, g.width, g.height);
+        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", self.id, x, y, w, h);
+        Ok((x as i32, y as i32, w as u32, h as u32))
+    }
+
+    /// Get window frame border values added by the window manager
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// let (l, r, t, b) = WM().read().unwrap().window_borders().unwrap();
+    /// ```
+    pub(crate) fn window_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
+        // Defined as: _NET_FRAME_EXTENTS, left, right, top, bottom, CARDINAL[4]/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_FRAME_EXTENTS`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+        // retrieve the values of which there will be...
+        let reply = self
+            .conn
+            .get_property(false, id, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?
+            .reply()?;
+        let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS".to_owned()))?;
+        let l = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS left".to_owned()))?;
+        let r = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS right".to_owned()))?;
+        let t = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS top".to_owned()))?;
+        let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
+        debug!("win_borders: id: {}, l: {}, r: {}, t: {}, b: {}", self.id, l, r, t, b);
+        Ok((l, r, t, b))
+    }
+
+    /// Maximize the window both horizontally and vertically
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().maximize_window().unwrap();
+    /// ```
+    pub(crate) fn maximize_window(&self, id: u32) -> WmCtlResult<()> {
+        self.send_event(ClientMessageEvent::new(
+            32,
+            id,
+            self.atoms._NET_WM_STATE,
+            [
+                WINDOW_STATE_ACTION_ADD,
+                self.atoms._NET_WM_STATE_MAXIMIZED_HORZ,
+                self.atoms._NET_WM_STATE_MAXIMIZED_VERT,
+                0,
+                0,
+            ],
+        ))?;
+        debug!("maximize: id: {}", id);
+        Ok(())
+    }
+
+    /// Move and resize window
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Arguments
+    /// * `gravity` - gravity to use when resizing the window, defaults to NorthWest
+    /// * `x` - x coordinate to use for the window during positioning
+    /// * `y` - y coordinate to use for the window during positioning
+    /// * `w` - width to resize the window to
+    /// * `h` - height to resize the window to
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// win.move_resize_win(None, Some(0), Some(0), Some(500), Some(500)).unwrap();
+    /// ```
+    pub(crate) fn move_resize_window(
+        &self, id: u32, gravity: Option<u32>, x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>,
+    ) -> WmCtlResult<()> {
+        // Construct the move resize message
+        // Gravity is defined as the lower byte of the move resize flags 32bit value
+        // https://tronche.com/gui/x/xlib/window/attributes/gravity.html
+        // Defines how the window will shift as it grows or shrinks during a shape change operation.
+        // The default value is NorthWest which means that the window will grow to the right and down
+        // and will shrink up and left. By changing this to center you can get a more distributed growth
+        // or shrink perception.
+        let mut flags = gravity.unwrap_or(0);
+
+        // Define the second byte of the move resize flags 32bit value
+        // Used to indicate that the associated value has been changed and needs to be acted upon
+        if x.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_X;
+        }
+        if y.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_Y;
+        }
+        if w.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_WIDTH;
+        }
+        if h.is_some() {
+            flags |= MOVE_RESIZE_WINDOW_HEIGHT;
+        }
+
+        self.send_event(ClientMessageEvent::new(
+            32,
+            id,
+            self.atoms._NET_MOVERESIZE_WINDOW,
+            [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)],
+        ))?;
+
+        debug!("move_resize: id: {}, g: {:?}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", id, gravity, x, y, w, h);
+        Ok(())
+    }
+
+    /// Remove the MaxVert and MaxHorz states
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// WM().read().unwrap().unmaximize_window().unwrap();
+    /// ```
+    pub(crate) fn unmaximize_window(&self, id: u32) -> WmCtlResult<()> {
+        self.send_event(ClientMessageEvent::new(
+            32,
+            id,
+            self.atoms._NET_WM_STATE,
+            [
+                WINDOW_STATE_ACTION_REMOVE,
+                self.atoms._NET_WM_STATE_MAXIMIZED_HORZ,
+                self.atoms._NET_WM_STATE_MAXIMIZED_VERT,
+                0,
+                0,
+            ],
+        ))?;
+        debug!("unmaximize: id: {}", id);
+        Ok(())
+    }
+
     /// Get window manager's window id and name
     ///
     /// ### Examples
@@ -231,7 +556,7 @@ impl WinMgr {
             .value32()
             .and_then(|mut x| x.next())
             .ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTING_WM_CHECK".to_owned()))?;
-        let name = crate::Window::new(id).name()?;
+        let name = self.window_name(id)?;
         debug!("winmgr: id: {}, name: {}", id, name);
         Ok((id, name))
     }
@@ -346,6 +671,38 @@ impl WinMgr {
         }
         debug!("caching initialized");
         Ok((atoms, supported))
+    }
+
+    /// Send the event ensuring that a flush is called and that the message was precisely
+    /// executed in the case of a resize/move.
+    ///
+    /// ### Arguments
+    /// * `msg` - the client message event to send
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wmctl = WmCtl::connect().unwrap();
+    /// let flags = MOVE_RESIZE_WINDOW_WIDTH | MOVE_RESIZE_WINDOW_HEIGHT;
+    /// wmctl.send_event(ClientMessageEvent::new(32, win, wmctl.atoms._NET_MOVERESIZE_WINDOW,
+    ///     [flags, 0, 0, 500, 500])).unwrap();
+    /// ```
+    fn send_event(&self, msg: ClientMessageEvent) -> WmCtlResult<()> {
+        let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
+        self.conn.send_event(false, self.root, mask, &msg)?.check()?;
+        self.conn.flush()?;
+        debug!("send_event: win: {}", msg.window);
+
+        // I've found that Xfwm4 does not precisely resize a window on the first request. It may be
+        // this is a function of decorating the window during a redraw. At any rate because of this
+        // unfortunate shortcoming we have to send the event a second time.
+        if msg.type_ == self.atoms._NET_MOVERESIZE_WINDOW {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            self.conn.send_event(false, self.root, mask, &msg)?.check()?;
+            self.conn.flush()?;
+            debug!("send_event: win: {}", msg.window);
+        }
+        Ok(())
     }
 
     // Helper method to print out the data type

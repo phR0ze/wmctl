@@ -66,8 +66,7 @@ pub fn winmgr() -> WmCtlResult<Info> {
 /// let win = libwmctl::window(None);
 /// ```
 pub fn window(id: Option<u32>) -> Window {
-    let id = id.unwrap_or_else(|| WM().read().unwrap().active_window().unwrap());
-    Window::new(id)
+    Window::from(id)
 }
 
 /// Get all the windows the window manager is managing and their essential properties
