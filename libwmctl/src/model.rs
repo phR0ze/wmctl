@@ -35,7 +35,7 @@ pub struct CoordOpt {
 }
 
 /// WinMgr provides information about the window manager and its environment.
-pub struct WinMgr {
+pub struct Info {
     pub id: u32,
     pub name: String,
     pub compositing: bool,
@@ -44,6 +44,7 @@ pub struct WinMgr {
     pub screen_size: (u32, u32),
     pub desktops: u32,
 }
+
 /// WinGravity
 /// When windows are resized, subwindows may be repositioned automatically relative to some position
 /// in the window. This attraction of a subwindow to some part of its parent is known as window

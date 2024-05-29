@@ -1,6 +1,6 @@
 use libwmctl::prelude::*;
 
-// Resize and move the active window
+// Resize active window to half the screen size then position it to the right
 fn main() {
-    WinOpt::new(None).shape(Shape::Halfw).pos(Position::Right).place().unwrap();
+    window(None).shape(Shape::Halfw).pos(Position::Right).place().unwrap();
 }

@@ -17,12 +17,12 @@ mod atoms;
 mod error;
 mod model;
 mod window;
-mod wmctl;
+mod winmgr;
 pub use atoms::*;
 pub use error::*;
 pub use model::*;
 pub use window::Window;
-pub use wmctl::WmCtl;
+use winmgr::WinMgr;
 
 /// All essential symbols in a simple consumable form
 ///
@@ -39,20 +39,20 @@ pub mod prelude {
 /// as efficient as possible.
 use std::sync::{OnceLock, RwLock};
 #[allow(non_snake_case)]
-fn WMCTL() -> &'static RwLock<WmCtl> {
-    static INIT: OnceLock<RwLock<WmCtl>> = OnceLock::new();
-    INIT.get_or_init(|| RwLock::new(WmCtl::connect().unwrap()))
+fn WM() -> &'static RwLock<WinMgr> {
+    static INIT: OnceLock<RwLock<WinMgr>> = OnceLock::new();
+    INIT.get_or_init(|| RwLock::new(WinMgr::connect().unwrap()))
 }
 
-/// Get the window manager
+/// Get window manager informational properties
 ///
 /// ### Examples
 /// ```ignore
 /// use libwmctl::prelude::*;
-/// libwmctl::window_manager().unwrap();
+/// libwmctl::winmgr().unwrap();
 /// ```
-pub fn window_manager() -> WmCtlResult<WinMgr> {
-    Ok(WMCTL().read().unwrap().window_manager()?)
+pub fn winmgr() -> WmCtlResult<Info> {
+    Ok(WM().read().unwrap().info()?)
 }
 
 /// Get the window by id or the active window if not given
@@ -66,7 +66,7 @@ pub fn window_manager() -> WmCtlResult<WinMgr> {
 /// let win = libwmctl::window(None);
 /// ```
 pub fn window(id: Option<u32>) -> Window {
-    let id = id.unwrap_or_else(|| WMCTL().read().unwrap().active_window().unwrap());
+    let id = id.unwrap_or_else(|| WM().read().unwrap().active_window().unwrap());
     Window::new(id)
 }
 
@@ -81,8 +81,7 @@ pub fn window(id: Option<u32>) -> Window {
 /// libwmctl::windows().unwrap();
 /// ```
 pub fn windows(hidden: bool) -> WmCtlResult<Vec<Window>> {
-    WMCTL()
-        .read()
+    WM().read()
         .unwrap()
         .windows(hidden)?
         .iter()

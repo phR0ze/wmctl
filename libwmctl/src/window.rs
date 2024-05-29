@@ -1,4 +1,4 @@
-use crate::{model::*, WmCtlError, WmCtlResult, WMCTL};
+use crate::{model::*, WmCtlError, WmCtlResult, WM};
 use std::str;
 use tracing::debug;
 use x11rb::protocol::xproto::{ConnectionExt as _, *};
@@ -26,7 +26,7 @@ impl Window {
     /// Use the given window id or the active window id if none is provided
     pub(crate) fn from(id: Option<u32>) -> Self {
         Self {
-            id: id.unwrap_or(WMCTL().read().unwrap().active_window().unwrap()),
+            id: id.unwrap_or(WM().read().unwrap().active_window().unwrap()),
             shape: None,
             pos: None,
         }
@@ -41,7 +41,7 @@ impl Window {
     /// let pid = win.pid().unwrap();
     /// ```
     pub fn pid(&self) -> WmCtlResult<i32> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Defined as: _NET_WM_PID, CARDINAL/32
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_PID`
@@ -68,7 +68,7 @@ impl Window {
     /// let name = win.name().unwrap();
     /// ```
     pub fn name(&self) -> WmCtlResult<String> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Defined as: _NET_WM_NAME, UTF8_STRING
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_NAME`
@@ -128,7 +128,7 @@ impl Window {
     /// let class = win.class().unwrap();
     /// ```
     pub fn class(&self) -> WmCtlResult<String> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         let reply =
             wm.conn.get_property(false, self.id, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, u32::MAX)?.reply()?;
@@ -154,7 +154,7 @@ impl Window {
     /// let kind = win.kind().unwrap();
     /// ```
     pub fn kind(&self) -> WmCtlResult<WinKind> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Defined as: _NET_WM_WINDOW_TYPE, ATOM[]/32
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_WINDOW_TYPE`
@@ -182,7 +182,7 @@ impl Window {
     /// let state = win.state().unwrap();
     /// ```
     pub fn state(&self) -> WmCtlResult<Vec<WinState>> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Defined as: _NET_WM_STATE, ATOM[]
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_STATE`
@@ -209,7 +209,7 @@ impl Window {
     /// ```
     #[allow(dead_code)]
     pub fn parent(&self) -> WmCtlResult<Window> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         let tree = wm.conn.query_tree(self.id)?.reply()?;
         let parent_id = tree.parent;
@@ -226,7 +226,7 @@ impl Window {
     /// let desktop = win.desktop().unwrap();
     /// ```
     pub fn desktop(&self) -> WmCtlResult<i32> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Defined as: _NET_WM_DESKTOP desktop, CARDINAL/32
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_DESKTOP`
@@ -253,7 +253,7 @@ impl Window {
     /// let (x, y, w, h) = win.geometry().unwrap();
     /// ```
     pub fn geometry(&self) -> WmCtlResult<(i32, i32, u32, u32)> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // The returned x, y location is relative to its parent window making the values completely
         // useless. However using `translate_coordinates` we can have the window manager map those
@@ -279,7 +279,7 @@ impl Window {
     /// let (l, r, t, b) = win.borders().unwrap();
     /// ```
     pub fn borders(&self) -> WmCtlResult<(u32, u32, u32, u32)> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Defined as: _NET_FRAME_EXTENTS, left, right, top, bottom, CARDINAL[4]/32
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_FRAME_EXTENTS`
@@ -307,7 +307,7 @@ impl Window {
     /// win.maximize().unwrap();
     /// ```
     pub fn maximize(&self) -> WmCtlResult<()> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         wm.send_event(ClientMessageEvent::new(
             32,
@@ -346,7 +346,7 @@ impl Window {
     /// win.unmaximize().unwrap();
     /// ```
     pub fn unmaximize(&self) -> WmCtlResult<()> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         wm.send_event(ClientMessageEvent::new(
             32,
@@ -407,7 +407,7 @@ impl Window {
         if self.shape.is_none() && self.pos.is_none() {
             return Ok(());
         }
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Unmaximize to shape and position the window correctly
         //self.unmaximize()?;
@@ -417,17 +417,15 @@ impl Window {
         let (_, _, w, h) = self.geometry()?;
 
         // Shape the window as directed
-        let (gravity, sw, sh) = if let Some(_shape) = self.shape {
-            let (gravity, sw, sh) = translate_shape(w, h, bl + br, bt + bb, _shape)?;
+        let (gravity, sw, sh) = if let Some(shape) = self.shape.as_ref() {
+            let (gravity, sw, sh) = translate_shape(w, h, bl + br, bt + bb, wm.work_width, wm.work_width, shape)?;
 
             // Don't use gravity if positioning is required
-            if self.pos.is_some() || self.x.is_some() || self.y.is_some() {
+            if self.pos.is_some() {
                 (None, sw, sh)
             } else {
                 (gravity, sw, sh)
             }
-        } else if self.w.is_some() && self.h.is_some() {
-            (None, Some(self.w.unwrap()), Some(self.h.unwrap()))
         } else {
             (None, None, None)
         };
@@ -461,7 +459,7 @@ impl Window {
     fn move_resize(
         &self, gravity: Option<u32>, x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>,
     ) -> WmCtlResult<()> {
-        let wm = WMCTL().read().unwrap();
+        let wm = WM().read().unwrap();
 
         // Construct the move resize message
         // Gravity is defined as the lower byte of the move resize flags 32bit value
@@ -671,23 +669,25 @@ mod tests {
     fn test_translate_shape_halfw() {
         // No borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 0.0, 0.0, 2560.0, 1415.0);
-        let (g, _x, _y) =
+        let (g, _w, _h) =
             translate_shape(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Shape::Halfw)
                 .unwrap();
         let hw = (aw / 2.0) as u32;
         let fh = (ah) as u32;
-        assert_eq!(_x, Some(hw));
-        assert_eq!(_y, Some(fh));
+        assert_eq!(g, None);
+        assert_eq!(_w, Some(hw));
+        assert_eq!(_h, Some(fh));
 
         // With borders
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
-        let (g, _x, _y) =
+        let (g, _w, _h) =
             translate_shape(w as u32, h as u32, bw as u32, bh as u32, aw as u32, ah as u32, &Shape::Halfw)
                 .unwrap();
-        let hw = (aw / 2.0) as u32;
-        let fh = (ah) as u32;
-        assert_eq!(_x, Some(hw));
-        assert_eq!(_y, Some(fh));
+        let hw = (aw / 2.0 - bw) as u32;
+        let fh = (ah - bh) as u32;
+        assert_eq!(g, None);
+        assert_eq!(_w, Some(hw));
+        assert_eq!(_h, Some(fh));
     }
 
     #[test]

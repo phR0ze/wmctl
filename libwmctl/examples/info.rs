@@ -2,7 +2,7 @@ use libwmctl::prelude::*;
 use prettytable::{Cell, Row, Table};
 
 fn main() {
-    let wm = window_manager().unwrap();
+    let wm = winmgr().unwrap();
     let win = window(None);
 
     println!("X11 Information");
@@ -52,5 +52,4 @@ fn main() {
         Cell::new(&win.name().unwrap_or("".to_owned())),
     ]));
     table.printstd();
-    //win.pos(Position::TopCenter).place().unwrap();
 }

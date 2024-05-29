@@ -23,19 +23,23 @@ use x11rb::{
 
 /// Window Manager control implements the EWMH protocol using x11rb to provide a simplified access
 /// layer to EWHM compatible window managers.
-pub struct WmCtl {
-    pub(crate) conn: Arc<RustConnection>, // x11 connection
-    pub atoms: AtomCollection,            // atom cache
-    supported: HashMap<u32, bool>,        // cache for supported functions
-    pub(crate) screen: usize,             // screen number
-    pub(crate) root: u32,                 // root window id
-    pub(crate) width: u32,                // screen width
-    pub(crate) height: u32,               // screen height
-    pub(crate) work_width: u32,           // screen height
-    pub(crate) work_height: u32,          // screen height
+pub(crate) struct WinMgr {
+    pub(crate) conn: RustConnection, // x11 connection
+    pub atoms: AtomCollection,       // atom cache
+    supported: HashMap<u32, bool>,   // cache for supported functions
+    pub(crate) id: u32,              // window manager id
+    pub(crate) name: String,         // window manager name
+    pub(crate) screen: usize,        // screen number
+    pub(crate) root: u32,            // root window id
+    pub(crate) width: u32,           // screen width
+    pub(crate) height: u32,          // screen height
+    pub(crate) work_width: u32,      // work area width (i.e. minus panels)
+    pub(crate) work_height: u32,     // work areas height (i.e. minus panels)
+    pub(crate) desktops: u32,        // number of desktops
+    pub(crate) compositing: bool,    // compositing manager running
 }
 
-impl WmCtl {
+impl WinMgr {
     /// Create the window manager control instance and connect to the X11 server
     ///
     /// ### Examples
@@ -43,7 +47,7 @@ impl WmCtl {
     /// use libwmctl::prelude::*;
     /// let wmctl = WmCtl::connect().unwrap();
     /// ```
-    pub fn connect() -> WmCtlResult<Self> {
+    pub(crate) fn connect() -> WmCtlResult<Self> {
         let (conn, screen) = x11rb::connect(None)?;
 
         // Get the screen size
@@ -53,11 +57,13 @@ impl WmCtl {
         };
 
         // Populate the supported functions cache
-        let (atoms, supported) = WmCtl::init_caching(&conn, root)?;
+        let (atoms, supported) = WinMgr::init_caching(&conn, root)?;
 
         // Create the window manager object
-        let mut wmctl = WmCtl {
-            conn: Arc::new(conn),
+        let mut wm = WinMgr {
+            id: Default::default(),
+            name: Default::default(),
+            conn,
             atoms,
             supported,
             screen,
@@ -66,87 +72,42 @@ impl WmCtl {
             height,
             work_width: Default::default(),
             work_height: Default::default(),
+            desktops: Default::default(),
+            compositing: Default::default(),
         };
 
-        // Get the work area
-        let (width, height) = wmctl.workarea()?;
-        wmctl.work_width = width as u32;
-        wmctl.work_height = height as u32;
+        // Fill in missing properties that require a connection and supported atoms init_caching
+        let (id, name) = wm.id()?;
+        wm.id = id;
+        wm.name = name;
+        let (width, height) = wm.workarea()?;
+        wm.work_width = width as u32;
+        wm.work_height = height as u32;
+        wm.desktops = wm.desktops()?;
+        wm.compositing = wm.compositing()?;
 
         debug!("connect: screen: {}, root: {}, w: {}, h: {}", screen, root, width, height);
-        Ok(wmctl)
+        Ok(wm)
     }
 
-    /// Get the default screen number
+    /// Get window manager's informational properties
     ///
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
     /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.screen();
+    /// let (id, name) = wmctl.winmgr().unwrap();
     /// ```
-    pub fn screen(&self) -> usize {
-        self.screen
-    }
-
-    /// Get the root window
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.root();
-    /// ```
-    pub fn root(&self) -> u32 {
-        self.root
-    }
-
-    /// Get the screen full width
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.width();
-    /// ```
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    /// Get screen full height
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.height();
-    /// ```
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    /// Get screen work width which is the full width minus any taskbars
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.work_width();
-    /// ```
-    pub fn work_width(&self) -> u32 {
-        self.work_width
-    }
-
-    /// Get screen work height which is the full width minus any taskbars
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.work_height();
-    /// ```
-    pub fn work_height(&self) -> u32 {
-        self.work_height
+    pub(crate) fn info(&self) -> WmCtlResult<Info> {
+        Ok(Info {
+            id: self.id,
+            name: self.name.clone(),
+            root_win_id: self.root,
+            work_area: (self.work_width, self.work_height),
+            screen_size: (self.width, self.height),
+            desktops: self.desktops,
+            compositing: self.compositing,
+        })
     }
 
     /// Get the active window id
@@ -157,7 +118,7 @@ impl WmCtl {
     /// let wmctl = WmCtl::connect().unwrap();
     /// wmctl.active_win().unwrap();
     /// ```
-    pub fn active_window(&self) -> WmCtlResult<u32> {
+    pub(crate) fn active_window(&self) -> WmCtlResult<u32> {
         // Defined as: _NET_ACTIVE_WINDOW, WINDOW/32
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_ACTIVE_WINDOW`
         // request message with a `AtomEnum::WINDOW` type response and we can use the `reply.value32()` accessor to
@@ -174,51 +135,6 @@ impl WmCtl {
         Ok(win)
     }
 
-    /// Check if a composit manager is running
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.compositing().unwrap();
-    /// ```
-    pub fn compositing(&self) -> WmCtlResult<bool> {
-        // Defined as: _NET_WM_CM_Sn
-        // For each screen the compositing manager manages they MUST acquire ownership of a
-        // selection named _NET_WM_CM_Sn, where the suffix `n` is the screen number.
-        let atom = format!("_NET_WM_CM_S{}", self.screen);
-        let atom = self.conn.intern_atom(false, atom.as_bytes())?.reply()?.atom;
-        let reply = self.conn.get_selection_owner(atom)?.reply()?;
-        let result = reply.owner != x11rb::NONE;
-        debug!("composite_manager: {}", result);
-        Ok(result)
-    }
-
-    /// Get number of desktops
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.desktops().unwrap();
-    /// ```
-    pub fn desktops(&self) -> WmCtlResult<u32> {
-        // Defined as: _NET_NUMBER_OF_DESKTOPS, CARDINAL/32
-        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_NUMBER_OF_DESKTOPS`
-        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
-        // retrieve the value.
-        let reply = self
-            .conn
-            .get_property(false, self.root, self.atoms._NET_NUMBER_OF_DESKTOPS, AtomEnum::CARDINAL, 0, u32::MAX)?
-            .reply()?;
-        let num = reply
-            .value32()
-            .and_then(|mut x| x.next())
-            .ok_or(WmCtlError::PropertyNotFound("_NET_NUMBER_OF_DESKTOPS".to_owned()))?;
-        debug!("desktops: {}", num);
-        Ok(num)
-    }
-
     /// Send the event ensuring that a flush is called and that the message was precisely
     /// executed in the case of a resize/move.
     ///
@@ -233,7 +149,7 @@ impl WmCtl {
     /// wmctl.send_event(ClientMessageEvent::new(32, win, wmctl.atoms._NET_MOVERESIZE_WINDOW,
     ///     [flags, 0, 0, 500, 500])).unwrap();
     /// ```
-    pub fn send_event(&self, msg: ClientMessageEvent) -> WmCtlResult<()> {
+    pub(crate) fn send_event(&self, msg: ClientMessageEvent) -> WmCtlResult<()> {
         let mask = EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY;
         self.conn.send_event(false, self.root, mask, &msg)?.check()?;
         self.conn.flush()?;
@@ -263,10 +179,9 @@ impl WmCtl {
     /// wmctl.supported(wmctl.atoms._NET_MOVERESIZE_WINDOW);
     /// ```
     #[allow(dead_code)]
-    pub fn supported(&self, atom: u32) -> bool {
+    pub(crate) fn supported(&self, atom: u32) -> bool {
         self.supported.get(&atom).is_some()
     }
-
     /// Get windows optionally all
     ///
     /// ### Arguments
@@ -278,7 +193,7 @@ impl WmCtl {
     /// let wmctl = WmCtl::connect().unwrap();
     /// wmctl.windows(false).unwrap();
     /// ```
-    pub fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>> {
+    pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>> {
         let mut windows = vec![];
         if all {
             // All windows in the X11 system
@@ -299,28 +214,6 @@ impl WmCtl {
         }
         Ok(windows)
     }
-
-    /// Get window manager's properties
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// let (id, name) = wmctl.winmgr().unwrap();
-    /// ```
-    pub fn window_manager(&self) -> WmCtlResult<WinMgr> {
-        let (id, name) = self.winmgr_id()?;
-        Ok(WinMgr {
-            id,
-            name,
-            compositing: self.compositing()?,
-            root_win_id: self.root,
-            work_area: (self.work_width, self.work_height),
-            screen_size: (self.width, self.height),
-            desktops: self.desktops()?,
-        })
-    }
-
     /// Get window manager's window id and name
     ///
     /// ### Examples
@@ -329,7 +222,7 @@ impl WmCtl {
     /// let wmctl = WmCtl::connect().unwrap();
     /// let (id, name) = wmctl.winmgr().unwrap();
     /// ```
-    pub fn winmgr_id(&self) -> WmCtlResult<(u32, String)> {
+    fn id(&self) -> WmCtlResult<(u32, String)> {
         let reply = self
             .conn
             .get_property(false, self.root, self.atoms._NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, u32::MAX)?
@@ -351,7 +244,7 @@ impl WmCtl {
     /// let wmctl = WmCtl::connect().unwrap();
     /// let (w, h) = wmctl.workarea().unwrap();
     /// ```
-    pub fn workarea(&self) -> WmCtlResult<(u16, u16)> {
+    fn workarea(&self) -> WmCtlResult<(u16, u16)> {
         // Defined as: _NET_WORKAREA, x, y, width, height CARDINAL[][4]/32
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WORKAREA`
         // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
@@ -369,6 +262,51 @@ impl WmCtl {
 
         // x and y are always zero so dropping them
         Ok((w as u16, h as u16))
+    }
+
+    /// Check if a composit manager is running
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wmctl = WmCtl::connect().unwrap();
+    /// wmctl.compositing().unwrap();
+    /// ```
+    fn compositing(&self) -> WmCtlResult<bool> {
+        // Defined as: _NET_WM_CM_Sn
+        // For each screen the compositing manager manages they MUST acquire ownership of a
+        // selection named _NET_WM_CM_Sn, where the suffix `n` is the screen number.
+        let atom = format!("_NET_WM_CM_S{}", self.screen);
+        let atom = self.conn.intern_atom(false, atom.as_bytes())?.reply()?.atom;
+        let reply = self.conn.get_selection_owner(atom)?.reply()?;
+        let result = reply.owner != x11rb::NONE;
+        debug!("composite_manager: {}", result);
+        Ok(result)
+    }
+
+    /// Get number of desktops
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wmctl = WmCtl::connect().unwrap();
+    /// wmctl.desktops().unwrap();
+    /// ```
+    fn desktops(&self) -> WmCtlResult<u32> {
+        // Defined as: _NET_NUMBER_OF_DESKTOPS, CARDINAL/32
+        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_NUMBER_OF_DESKTOPS`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
+        // retrieve the value.
+        let reply = self
+            .conn
+            .get_property(false, self.root, self.atoms._NET_NUMBER_OF_DESKTOPS, AtomEnum::CARDINAL, 0, u32::MAX)?
+            .reply()?;
+        let num = reply
+            .value32()
+            .and_then(|mut x| x.next())
+            .ok_or(WmCtlError::PropertyNotFound("_NET_NUMBER_OF_DESKTOPS".to_owned()))?;
+        debug!("desktops: {}", num);
+        Ok(num)
     }
 
     /// Get window attribrtes
