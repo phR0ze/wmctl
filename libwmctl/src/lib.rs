@@ -51,7 +51,7 @@ fn WM() -> &'static RwLock<WinMgr> {
 /// use libwmctl::prelude::*;
 /// libwmctl::winmgr().unwrap();
 /// ```
-pub fn winmgr() -> WmCtlResult<Info> {
+pub fn info() -> WmCtlResult<Info> {
     Ok(WM().read().unwrap().info()?)
 }
 
@@ -86,6 +86,28 @@ pub fn windows(hidden: bool) -> WmCtlResult<Vec<Window>> {
         .iter()
         .map(|&id| Ok(Window::new(id)))
         .collect::<WmCtlResult<Vec<Window>>>()
+}
+
+/// Get the first window that matches the given class
+///
+/// ### Arguments
+/// * `class` - the class to match against
+///
+/// ### Examples
+/// ```ignore
+/// use libwmctl::prelude::*;
+/// let win = libwmctl::first_by_class("firefox").unwrap();
+/// ```
+pub fn first_by_class(class: &str) -> Option<Window> {
+    let windows = windows(false);
+    if windows.is_err() {
+        return None;
+    }
+    windows
+        .unwrap()
+        .iter()
+        .find(|x| x.class().unwrap_or("".to_string()) == class)
+        .map_or(None, |x| Some(x.clone()))
 }
 
 #[cfg(test)]

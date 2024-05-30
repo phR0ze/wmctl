@@ -31,7 +31,7 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
     /// ```
     pub(crate) fn connect() -> WmCtlResult<Self> {
         let (conn, screen) = x11rb::connect(None)?;
@@ -81,8 +81,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// let (id, name) = wmctl.winmgr().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.info().unwrap()
     /// ```
     pub(crate) fn info(&self) -> WmCtlResult<Info> {
         Ok(Info {
@@ -101,8 +101,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.active_win().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.active_window().unwrap()
     /// ```
     pub(crate) fn active_window(&self) -> WmCtlResult<u32> {
         // Defined as: _NET_ACTIVE_WINDOW, WINDOW/32
@@ -129,13 +129,14 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.supported(wmctl.atoms._NET_MOVERESIZE_WINDOW);
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.supported(wm.atoms._NET_MOVERESIZE_WINDOW);
     /// ```
     #[allow(dead_code)]
     pub(crate) fn supported(&self, atom: u32) -> bool {
         self.supported.get(&atom).is_some()
     }
+
     /// Get windows optionally all
     ///
     /// ### Arguments
@@ -144,8 +145,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.windows(false).unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.windows(false).unwrap()
     /// ```
     pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>> {
         let mut windows = vec![];
@@ -177,7 +178,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().window_pid(self.id)
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.window_pid(1234)
     /// ```
     pub(crate) fn window_pid(&self, id: u32) -> WmCtlResult<i32> {
         // Defined as: _NET_WM_PID, CARDINAL/32
@@ -202,7 +204,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().window_name(self.id)
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.window_name(1234)
     /// ```
     pub(crate) fn window_name(&self, id: u32) -> WmCtlResult<String> {
         // Defined as: _NET_WM_NAME, UTF8_STRING
@@ -259,7 +262,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().window_class(self.id)
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.window_class(1234)
     /// ```
     pub(crate) fn window_class(&self, id: u32) -> WmCtlResult<String> {
         let reply =
@@ -282,7 +286,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().window_kind(self.id)
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.window_kind(1234)
     /// ```
     pub(crate) fn window_kind(&self, id: u32) -> WmCtlResult<WinKind> {
         // Defined as: _NET_WM_WINDOW_TYPE, ATOM[]/32
@@ -310,21 +315,23 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().window_state(self.id)
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.window_state(1234)
     /// ```
     pub(crate) fn window_state(&self, id: u32) -> WmCtlResult<Vec<WinState>> {
         // Defined as: _NET_WM_STATE, ATOM[]
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_STATE`
         // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
         // retrieve the values of which there will be a single value.
-        let mut states = vec![];
         let reply =
             self.conn.get_property(false, id, self.atoms._NET_WM_STATE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+
+        let mut states = vec![];
         for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
             let state = WinState::from(&self.atoms, state)?;
-            debug!("win_state: id: {}, state: {}", id, state);
             states.push(state);
         }
+        debug!("win_state: id: {}, state: {:?}", id, states);
         Ok(states)
     }
 
@@ -336,7 +343,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().window_parent(self.id)
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.window_parent(1234)
     /// ```
     #[allow(dead_code)]
     pub(crate) fn window_parent(&self, id: u32) -> WmCtlResult<crate::Window> {
@@ -354,7 +362,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().window_desktop(self.id)
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.window_desktop(1234)
     /// ```
     pub(crate) fn window_desktop(&self, id: u32) -> WmCtlResult<i32> {
         // Defined as: _NET_WM_DESKTOP desktop, CARDINAL/32
@@ -381,8 +390,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let win = window(12345);
-    /// let (x, y, w, h) = WM().read().unwrap().window_geometry(self.id).unwrap()
+    /// let wm = WinMgr::connect().unwrap();
+    /// let (x, y, w, h) = wm.window_geometry(1234).unwrap()
     /// ```
     pub(crate) fn window_geometry(&self, id: u32) -> WmCtlResult<(i32, i32, u32, u32)> {
         // The returned x, y location is relative to its parent window making the values completely
@@ -396,7 +405,7 @@ impl WinMgr {
         let t = self.conn.translate_coordinates(id, self.root, g.x, g.y)?.reply()?;
 
         let (x, y, w, h) = (t.dst_x, t.dst_y, g.width, g.height);
-        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", self.id, x, y, w, h);
+        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
         Ok((x as i32, y as i32, w as u32, h as u32))
     }
 
@@ -408,14 +417,26 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
     /// let win = window(12345);
-    /// let (l, r, t, b) = WM().read().unwrap().window_borders().unwrap();
+    /// let (l, r, t, b) = wm.window_borders().unwrap();
     /// ```
     pub(crate) fn window_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
-        // Defined as: _NET_FRAME_EXTENTS, left, right, top, bottom, CARDINAL[4]/32
-        // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_FRAME_EXTENTS`
-        // request message with a `AtomEnum::CARDINAL` type response and we can use the `reply.value32()` accessor to
-        // retrieve the values of which there will be...
+        // Window managers (a.k.a server-side) decorate windows with boarders and title bars. The
+        // _NET_FRAME_EXTENTS defined as: left, right, top, bottom, CARDINAL[4]/32 will retrieve
+        // these values via `get_property` api call with the use of the `self.atoms._NET_FRAME_EXTENTS`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the
+        // `reply.value32()`. Client-side decorations (CSD) is where the application draws the
+        // window decorations (borders, titlebar etc...) itself. In the CSD architecture used by GNOME
+        // the application draws decorations including the shadows. The shadows are click-through and
+        // semitransparent, but they are still part of the app window. To account for this the GNOME
+        // app will set the _GTK_FRAME_EXTENTS property showing the space consumed by these shadows that
+        // can be effectively used as the window borders rather than the window manager borders provided
+        // by _NET_FRAME_EXTENTS. _GTK_FRAME_EXTENTS is defined as: left, right, top, bottom
+        //
+        // This is why `wmctl list` will show evince has geometry of 1280x1415 and borders of 0, 0, 0, 0
+        // while `xprop -id 104857608 | grep EXTENT` shows `_GTK_FRAME_EXTENTS(CARDINAL) = 23, 23, 15, 31`
+        // which would mean that the window geometry is actually 1280-23-23x1415-15-31 or 1234x1369.
         let reply = self
             .conn
             .get_property(false, id, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?
@@ -425,8 +446,53 @@ impl WinMgr {
         let r = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS right".to_owned()))?;
         let t = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS top".to_owned()))?;
         let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
-        debug!("win_borders: id: {}, l: {}, r: {}, t: {}, b: {}", self.id, l, r, t, b);
+        debug!("win_borders: id: {}, l: {}, r: {}, t: {}, b: {}", id, l, r, t, b);
         Ok((l, r, t, b))
+    }
+
+    /// Get all properties for the given window
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.active_win().unwrap();
+    /// ```
+    pub(crate) fn window_properties(&self, id: u32) -> WmCtlResult<u32> {
+        let reply = self
+            .conn
+            .get_property(false, self.root, self.atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, u32::MAX)?
+            .reply()?;
+        let win = reply
+            .value32()
+            .and_then(|mut x| x.next())
+            .ok_or(WmCtlError::PropertyNotFound("_NET_ACTIVE_WINDOW".to_owned()))?;
+        debug!("active_win: {}", win);
+        Ok(win)
+    }
+
+    /// Get window attribrtes
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// let (class, state) = wm.win_attributes(12345).unwrap();
+    /// ```
+    #[allow(dead_code)]
+    pub(crate) fn window_attributes(&self, id: u32) -> WmCtlResult<(WinClass, WinMap)> {
+        let attr = self.conn.get_window_attributes(id)?.reply()?;
+        debug!(
+            "win_attributes: id: {}, win_gravity: {:?}, bit_gravity: {:?}",
+            id, attr.win_gravity, attr.bit_gravity
+        );
+        Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
     }
 
     /// Maximize the window both horizontally and vertically
@@ -437,7 +503,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().maximize_window().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.maximize_window().unwrap();
     /// ```
     pub(crate) fn maximize_window(&self, id: u32) -> WmCtlResult<()> {
         self.send_event(ClientMessageEvent::new(
@@ -471,6 +538,7 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
     /// let win = window(12345);
     /// win.move_resize_win(None, Some(0), Some(0), Some(500), Some(500)).unwrap();
     /// ```
@@ -520,7 +588,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// WM().read().unwrap().unmaximize_window().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.unmaximize_window().unwrap();
     /// ```
     pub(crate) fn unmaximize_window(&self, id: u32) -> WmCtlResult<()> {
         self.send_event(ClientMessageEvent::new(
@@ -544,8 +613,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// let (id, name) = wmctl.winmgr().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// let (id, name) = wm.winmgr().unwrap();
     /// ```
     fn id(&self) -> WmCtlResult<(u32, String)> {
         let reply = self
@@ -566,8 +635,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// let (w, h) = wmctl.workarea().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// let (w, h) = wm.workarea().unwrap();
     /// ```
     fn workarea(&self) -> WmCtlResult<(u16, u16)> {
         // Defined as: _NET_WORKAREA, x, y, width, height CARDINAL[][4]/32
@@ -594,8 +663,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.compositing().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.compositing().unwrap();
     /// ```
     fn compositing(&self) -> WmCtlResult<bool> {
         // Defined as: _NET_WM_CM_Sn
@@ -614,8 +683,8 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// wmctl.desktops().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.desktops().unwrap();
     /// ```
     fn desktops(&self) -> WmCtlResult<u32> {
         // Defined as: _NET_NUMBER_OF_DESKTOPS, CARDINAL/32
@@ -632,27 +701,6 @@ impl WinMgr {
             .ok_or(WmCtlError::PropertyNotFound("_NET_NUMBER_OF_DESKTOPS".to_owned()))?;
         debug!("desktops: {}", num);
         Ok(num)
-    }
-
-    /// Get window attribrtes
-    ///
-    /// ### Arguments
-    /// * `win` - id of the window to manipulate
-    ///
-    /// ### Examples
-    /// ```ignore
-    /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
-    /// let (class, state) = wmctl.win_attributes(12345).unwrap();
-    /// ```
-    #[allow(dead_code)]
-    pub fn win_attributes(&self, win: xproto::Window) -> WmCtlResult<(WinClass, WinMap)> {
-        let attr = self.conn.get_window_attributes(win)?.reply()?;
-        debug!(
-            "win_attributes: id: {}, win_gravity: {:?}, bit_gravity: {:?}",
-            win, attr.win_gravity, attr.bit_gravity
-        );
-        Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
     }
 
     // Initialize caching
@@ -682,9 +730,9 @@ impl WinMgr {
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
-    /// let wmctl = WmCtl::connect().unwrap();
+    /// let wm = WinMgr::connect().unwrap();
     /// let flags = MOVE_RESIZE_WINDOW_WIDTH | MOVE_RESIZE_WINDOW_HEIGHT;
-    /// wmctl.send_event(ClientMessageEvent::new(32, win, wmctl.atoms._NET_MOVERESIZE_WINDOW,
+    /// wm.send_event(ClientMessageEvent::new(32, win, wm.atoms._NET_MOVERESIZE_WINDOW,
     ///     [flags, 0, 0, 500, 500])).unwrap();
     /// ```
     fn send_event(&self, msg: ClientMessageEvent) -> WmCtlResult<()> {

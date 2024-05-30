@@ -39,8 +39,10 @@ clap = "2.33"
 gory = "0.1"
 tracing = "0.1"
 witcher = "0.1.19"
-libwmctl = "0.0.45"
+#libwmctl = "0.0.45"
+libwmctl = { path = "libwmctl" }
 tracing-subscriber = "0.3"
+prettytable = "0.10.0"
 
 # Tests, examples and build.rs are built with these dependencies
 [build-dependencies]

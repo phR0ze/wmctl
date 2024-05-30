@@ -1,10 +1,9 @@
 use libwmctl::prelude::*;
-use prettytable::{Cell, Row, Table};
+use prettytable::{format, Cell, Row, Table};
+use witcher::prelude::*;
 
-fn main() {
-    let wm = info().unwrap();
-    let win = window(None);
-
+pub fn list() -> Result<()> {
+    let wm = libwmctl::info().pass()?;
     println!("X11 Information");
     println!("-----------------------------------------------------------------------");
     println!("Window Manager: {}", wm.name);
@@ -16,7 +15,9 @@ fn main() {
     println!();
 
     println!("Active Window");
+    let win = window(None);
     let mut table = Table::new();
+    table.set_format(format::FormatBuilder::new().padding(1, 1).build());
     table.add_row(Row::new(vec![
         Cell::new("ID"),
         Cell::new("DSK"),
@@ -49,4 +50,6 @@ fn main() {
         Cell::new(&win.name().unwrap_or("".to_owned())),
     ]));
     table.printstd();
+
+    Ok(())
 }

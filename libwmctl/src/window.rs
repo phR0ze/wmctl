@@ -1,11 +1,7 @@
-use crate::{model::*, WmCtlError, WmCtlResult, WM};
-use std::str;
-use tracing::debug;
-use x11rb::protocol::xproto::{ConnectionExt as _, *};
+use crate::{model::*, WmCtlResult, WM};
 
-/// Window provides information about a specific window.
-/// - geometry: (x, y, width, height)
-/// - borders: (left, right, top, bottom)
+/// Window provides a higer level interfacefor manipulating windows.
+#[derive(Clone)]
 pub struct Window {
     pub id: u32,
 
@@ -140,6 +136,19 @@ impl Window {
         WM().read().unwrap().window_borders(self.id)
     }
 
+    /// Get all window properties generically
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// win.properties().unwrap();
+    /// ```
+    pub fn properties(&self) -> WmCtlResult<()> {
+        WM().read().unwrap().window_properties(self.id)?;
+        Ok(())
+    }
+
     /// Maximize the window both horizontally and vertically
     ///
     /// ### Examples
@@ -191,7 +200,8 @@ impl Window {
         self
     }
 
-    /// Queue the position the window should be. This will not take effect until the place() method is called.
+    /// Queue the position the window should be. This will not take effect until the place() method
+    /// is called.
     ///
     /// ### Arguments
     /// * `pos` - pre-defined position to move the window to
@@ -222,7 +232,9 @@ impl Window {
         let wm = WM().read().unwrap();
 
         // Unmaximize to shape and position the window correctly
-        //self.unmaximize()?;
+        if self.maximized() {
+            self.unmaximize()?;
+        }
 
         // Get window properties
         let (bl, br, bt, bb) = self.borders()?;
@@ -230,7 +242,7 @@ impl Window {
 
         // Shape the window as directed
         let (gravity, sw, sh) = if let Some(shape) = self.shape.as_ref() {
-            let (gravity, sw, sh) = translate_shape(w, h, bl + br, bt + bb, wm.work_width, wm.work_width, shape)?;
+            let (gravity, sw, sh) = translate_shape(w, h, bl + br, bt + bb, wm.work_width, wm.work_height, shape)?;
 
             // Don't use gravity if positioning is required
             if self.pos.is_some() {

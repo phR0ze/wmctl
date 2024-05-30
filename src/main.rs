@@ -1,9 +1,9 @@
-//! `wmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
-//! as a way to work along side EWMH compatible window managers as a companion. `wmctl` provides the
-//! ability to precisely define how windows should be shaped and placed and can fill in gaps for
-//! window managers lacking some shaping or placement features. Mapping `wmctl` commands to user
-//! defined hot key sequences will allow for easy window manipulation beyond what your favorite EWMH
-//! window manager provides.
+//! `wmctl` implements a subset of the [Extended Window Manager Hints (EWMH)
+//! specification](https://specifications.freedesktop.org/wm-spec/latest/) as a way to work along
+//! side EWMH compatible window managers as a companion. `wmctl` provides the ability to precisely
+//! define how windows should be shaped and placed and can fill in gaps for window managers lacking
+//! some shaping or placement features. Mapping `wmctl` commands to user defined hot key sequences
+//! will allow for easy window manipulation beyond what your favorite EWMH window manager provides.
 //!
 //! ## Command line examples
 //!
@@ -35,10 +35,13 @@ use tracing::Level;
 use tracing_subscriber;
 use witcher::prelude::*;
 
+mod get;
+mod info;
+mod list;
+
 // Configure logging
 #[doc(hidden)]
-fn init_logging(level: Option<Level>)
-{
+fn init_logging(level: Option<Level>) {
     // Use the given log level as highest priority
     // Use environment log level as second priority
     // Fallback on INFO if neither is set
@@ -57,8 +60,7 @@ fn init_logging(level: Option<Level>)
 }
 
 #[doc(hidden)]
-fn init() -> Result<()>
-{
+fn init() -> Result<()> {
     const APP_NAME: &str = "wmctl";
     const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
     const APP_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
@@ -80,6 +82,7 @@ fn init() -> Result<()>
         // Global options
         .arg(Arg::with_name("loglevel").long("log-level").value_name("NAME").takes_value(true).help("Sets the log level [error|warn|info|debug|trace] [default: info]"))
         .arg(Arg::with_name("window").short("w").long("window").value_name("WINDOW").takes_value(true).help("Window to operate against"))
+        .arg(Arg::with_name("class").short("c").long("class").value_name("CLASS").takes_value(true).help("Class of window to operate against (first matching)"))
 
         // Version command
         .subcommand(SubCommand::with_name("version").alias("v").alias("ver").about("Print version information"))
@@ -136,10 +139,10 @@ winctl move bottom-center
 Examples:
 
 # Shape the active window to half the width but full height and position to the right
-winctl shape halfw right
+winctl place halfw right
 
 # Shape the active window to be small and position bottom left
-winctl shape small bottom-left
+winctl place small bottom-left
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
                 .value_names(&["halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
@@ -198,8 +201,14 @@ winctl resize 1276 757 0 0
         _ => None,
     });
 
-    // Determine the target window
-    let win = { matches.value_of("window").and_then(|x| x.parse::<u32>().ok()) };
+    // Determine the target window if given
+    let id = if matches.is_present("window") {
+        matches.value_of("window").and_then(|x| x.parse::<u32>().ok())
+    } else if matches.is_present("class") {
+        matches.value_of("class").and_then(|x| libwmctl::first_by_class(x).and_then(|x| Some(x.id)))
+    } else {
+        None
+    };
 
     // Version
     if let Some(ref _matches) = matches.subcommand_matches("version") {
@@ -211,47 +220,45 @@ winctl resize 1276 757 0 0
 
     // info
     } else if let Some(_) = matches.subcommand_matches("info") {
-        libwmctl::info(win).pass()?;
+        info::list()?;
 
     // list
     } else if let Some(matches) = matches.subcommand_matches("list") {
-        libwmctl::list(matches.is_present("all")).pass()?;
+        list::windows(matches.is_present("all"))?;
 
     // move
     } else if let Some(ref matches) = matches.subcommand_matches("move") {
-        let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        WinOpt::new(win).pos(pos).place().pass()?;
-
+        let pos = Position::try_from(matches.value_of("POSITION").unwrap()).pass()?;
+        window(id).pos(pos).place().pass()?;
     // place
     } else if let Some(ref matches) = matches.subcommand_matches("place") {
-        let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
-        let pos = WinPosition::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        WinOpt::new(win).shape(shape).pos(pos).place().pass()?;
+        let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
+        let pos = Position::try_from(matches.value_of("POSITION").unwrap()).pass()?;
+        window(id).shape(shape).pos(pos).place().pass()?;
 
     // static
     } else if let Some(ref matches) = matches.subcommand_matches("static") {
         let w = matches.value_of("WIDTH").unwrap().parse::<u32>().pass()?;
         let h = matches.value_of("HEIGHT").unwrap().parse::<u32>().pass()?;
-        let mut win = WinOpt::new(win).size(w, h);
+        let mut win = window(id).shape(Shape::Static(w, h));
         if matches.value_of("X").is_some() && matches.value_of("Y").is_some() {
             let x = matches.value_of("X").unwrap().parse::<u32>().pass()?;
             let y = matches.value_of("Y").unwrap().parse::<u32>().pass()?;
-            win = win.location(x, y);
+            win = win.pos(Position::Static(x, y));
         }
         win.place().pass()?;
 
     // shape
     } else if let Some(ref matches) = matches.subcommand_matches("shape") {
-        let shape = WinShape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
-        WinOpt::new(win).shape(shape).place().pass()?;
+        let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
+        window(id).shape(shape).place().pass()?;
     }
 
     Ok(())
 }
 
 #[doc(hidden)]
-fn main()
-{
+fn main() {
     match init() {
         Ok(_) => 0,
         Err(err) => {

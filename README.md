@@ -50,16 +50,15 @@ $ wmctl move bottom-left
 
 ### Place window
 Combine the shape and move into a single command by placing the window. First the window is shaped 
-using the pre-defined `small` shape then it is moved to the bottom left of the screen in a single 
+using the pre-defined `halfw` shape then it is moved to the top left of the screen in a single 
 operation.
 ```bash
-$ wmctl place small bottom-left
+$ wmctl place halfw top-left
 ```
 
 ## Development
 
 ### Run Examples
-
 
 ## License
 This project is licensed under either of:
@@ -79,6 +78,8 @@ any additional terms or conditions.
 ## Backlog
 
 ## Changelog
+* 5/30/2024
+  * Fix for GTK Client-side window decorations are not being calculated correctly
 * 12/18/2021
   * Add Arch Linux packaging
   * Added public documentation
