@@ -1,9 +1,8 @@
 use libwmctl::prelude::*;
 use prettytable::{format, Cell, Row, Table};
-use witcher::prelude::*;
 
-pub fn list() -> Result<()> {
-    let wm = libwmctl::info().pass()?;
+pub fn list() -> WmCtlResult<()> {
+    let wm = libwmctl::info()?;
     println!("X11 Information");
     println!("-----------------------------------------------------------------------");
     println!("Window Manager: {}", wm.name);

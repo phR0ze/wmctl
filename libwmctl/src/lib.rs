@@ -55,7 +55,18 @@ pub fn info() -> WmCtlResult<Info> {
     Ok(WM().read().unwrap().info()?)
 }
 
-/// Get the window by id or the active window if not given
+/// Get the active window
+///
+/// ### Examples
+/// ```ignore
+/// use libwmctl::prelude::*;
+/// let win = libwmctl::active();
+/// ```
+pub fn active() -> Window {
+    Window::from(None)
+}
+
+/// Get the window by id
 ///
 /// ### Arguments
 /// * `id` - id of the window or None
@@ -63,10 +74,10 @@ pub fn info() -> WmCtlResult<Info> {
 /// ### Examples
 /// ```ignore
 /// use libwmctl::prelude::*;
-/// let win = libwmctl::window(None);
+/// let win = libwmctl::window(1234);
 /// ```
-pub fn window(id: Option<u32>) -> Window {
-    Window::from(id)
+pub fn window(id: u32) -> Window {
+    Window::from(Some(id))
 }
 
 /// Get all the windows the window manager is managing and their essential properties

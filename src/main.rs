@@ -94,7 +94,7 @@ fn init() -> Result<()> {
 Examples:
 
 # List out X11 information
-winctl info
+wmctl info
 "))
 
         // List out all the windows
@@ -104,10 +104,10 @@ winctl info
 Examples:
 
 # List out windows
-winctl list
+wmctl list
 
 # List out all X windows
-winctl list -a
+wmctl list -a
 ")
         .arg(Arg::with_name("all").short("a").long("all").takes_value(false).help("Show all X windows not just WM windows"))
         )
@@ -119,13 +119,13 @@ winctl list -a
 Examples:
 
 # Move the active window to the center
-winctl move center
+wmctl move center
 
 # Move the active window to the right edge of the screen
-winctl move right
+wmctl move right
 
 # Move the active window to the bottom center of the screen
-winctl move bottom-center
+wmctl move bottom-center
 ")
             .arg(Arg::with_name("POSITION").index(1).required(true)
                 .value_names(&["center", "left", "right", "top", "bottom", "top-left", "top-right", "bottom-right", "bottom-left", "left-center", "right-center", "top-center", "bottom-center"])
@@ -139,10 +139,10 @@ winctl move bottom-center
 Examples:
 
 # Shape the active window to half the width but full height and position to the right
-winctl place halfw right
+wmctl place halfw right
 
 # Shape the active window to be small and position bottom left
-winctl place small bottom-left
+wmctl place small bottom-left
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
                 .value_names(&["halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
@@ -159,16 +159,16 @@ winctl place small bottom-left
 Examples:
 
 # Grow the active window by 10% on all sides
-winctl shape grow
+wmctl shape grow
 
 # Shrink the active window by 10% on all sides
-winctl shape shrink
+wmctl shape shrink
 
 # Shape the active window to be large i.e. 4x3 ~50% of the current screen size
-winctl shape medium
+wmctl shape medium
 
 # Shape the active window to be large i.e. 4x3 ~90% of the current screen size
-winctl shape large
+wmctl shape large
 ")
             .arg(Arg::with_name("SHAPE").index(1).required(true)
                 .value_names(&["halfh", "halfw", "small", "medium", "large", "grow", "max", "shrink", "unmax"])
@@ -182,10 +182,10 @@ winctl shape large
 Examples:
 
 # w and h are static values of the size of the window
-winctl resize 1276 757
+wmctl static 1276 757
 
 # w and h are static values of the size of the window and x, y are the intended location
-winctl resize 1276 757 0 0
+wmctl static 1276 757 0 0
 ")
             .arg(Arg::with_name("WIDTH").index(1).required(true).help("width of the window"))
             .arg(Arg::with_name("HEIGHT").index(2).required(true).help("height of the window"))
@@ -220,7 +220,7 @@ winctl resize 1276 757 0 0
 
     // info
     } else if let Some(_) = matches.subcommand_matches("info") {
-        info::list()?;
+        info::list().unwrap();
 
     // list
     } else if let Some(matches) = matches.subcommand_matches("list") {

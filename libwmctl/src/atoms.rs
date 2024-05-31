@@ -1,8 +1,15 @@
 use x11rb::atom_manager;
 
-// A collection of the atoms we will need.
+// This is a collection of the atoms we will need. The macro invocation below will look up the atoms
+// by name and store their values in this struct for later use at runtime. In order for this to work,
+// we need to invoke this as an initializer in the main functionw with `AtomCollection::new(conn)?;
+
 atom_manager! {
     pub AtomCollection: AtomCollectionCookie {
+        // GNOME custom hints
+        _GTK_FRAME_EXTENTS,
+
+        // Standard Extended Window Manager Hints
         _NET_ACTIVE_WINDOW,
         _NET_CLIENT_LIST,
         _NET_CLIENT_LIST_STACKING,
@@ -20,6 +27,7 @@ atom_manager! {
         _NET_SUPPORTED,
         _NET_SUPPORTING_WM_CHECK,
         _NET_SYSTEM_TRAY_OPCODE,
+        _NET_WORKAREA,
         _NET_WM_ACTION_ABOVE,
         _NET_WM_ACTION_BELOW,
         _NET_WM_ACTION_CHANGE_DESKTOP,
@@ -85,7 +93,6 @@ atom_manager! {
         _NET_WM_WINDOW_TYPE_TOOLBAR,
         _NET_WM_WINDOW_TYPE_TOOLTIP,
         _NET_WM_WINDOW_TYPE_UTILITY,
-        _NET_WORKAREA,
         UTF8_STRING,
     }
 }

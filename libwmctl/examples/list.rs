@@ -1,9 +1,9 @@
 use libwmctl::prelude::*;
 use prettytable::{format, Cell, Row, Table};
-use witcher::prelude::*;
 
-pub fn windows(all: bool) -> Result<()> {
-    let windows = libwmctl::windows(all).pass()?;
+// List all windows
+fn main() {
+    let windows = windows(false).unwrap();
     let mut table = Table::new();
     table.set_format(format::FormatBuilder::new().padding(1, 1).build());
     table.set_titles(Row::new(vec![
@@ -40,6 +40,4 @@ pub fn windows(all: bool) -> Result<()> {
         ]));
     }
     table.printstd();
-
-    Ok(())
 }

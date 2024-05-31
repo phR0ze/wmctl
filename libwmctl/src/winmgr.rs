@@ -1,28 +1,54 @@
+// ## References
+// * https://specifications.freedesktop.org/wm-spec/latest
+// * https://github.com/psychon/x11rb/blob/master/x11rb/examples/tutorial.rs
+// * [ICCCM specification](https://x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html)
+//
+// ## Details
+// * Atoms are unique names that clients can use to communicate information to each other.
+// * The window manager is a client of the X server and can be communicated with like any other client.
+// * Root window refers to the Window Manager. Sending messages (i.e. SendEvent) to the root window
+//   is effectively communicating with the window manager.
+//
+// ## ICCCM (Inter-Client Communication Conventions Manual)
+// * EWMH (Extended Window Manager Hints) specification builds on top of ICCCM and requires that
+//   implementors of EWMH also implement ICCCM.
+//
+// ### ICCCM Hints
+// * WM_CLASS           - window name
+// * WM_CLIENT_MACHINE  - hostname of the machine
+// * WM_ICON_NAME       - icon name
+// * WM_NAME            - window name
+//
+// ### Primitive Functions
+// * GetAtomName - get the name of an atom
+//
 use crate::{atoms::*, model::*, WmCtlError, WmCtlResult};
 use std::{collections::HashMap, str};
 use tracing::{debug, trace};
 
 use x11rb::{
     connection::Connection,
-    protocol::xproto::{self, ConnectionExt as _, *},
+    protocol::xproto::{ConnectionExt as _, *},
     rust_connection::RustConnection,
 };
 
 /// Window Manager provides a higher level interface to the underlying EWHM compatible window manager
 pub(crate) struct WinMgr {
-    pub(crate) conn: RustConnection, // x11 connection
-    pub atoms: AtomCollection,       // atom cache
-    supported: HashMap<u32, bool>,   // cache for supported functions
-    pub(crate) id: u32,              // window manager id
-    pub(crate) name: String,         // window manager name
-    pub(crate) screen: usize,        // screen number
-    pub(crate) root: u32,            // root window id
-    pub(crate) width: u32,           // screen width
-    pub(crate) height: u32,          // screen height
-    pub(crate) work_width: u32,      // work area width (i.e. minus panels)
-    pub(crate) work_height: u32,     // work areas height (i.e. minus panels)
-    pub(crate) desktops: u32,        // number of desktops
-    pub(crate) compositing: bool,    // compositing manager running
+    conn: RustConnection,            // x11 connection
+    atoms: AtomCollection,           // atom cache
+    supported: HashMap<u32, String>, // cache of {id => name} for supported functions
+    id: u32,                         // window manager id
+    name: String,                    // window manager name
+    screen: usize,                   // screen number
+    root: u32,                       // root window id
+    width: u32,                      // screen width
+    height: u32,                     // screen height
+    desktops: u32,                   // number of desktops
+    compositing: bool,               // compositing manager running
+
+    // Crate properties
+    pub(crate) work_width: u32,  // work area width (i.e. minus panels)
+    pub(crate) work_height: u32, // work areas height (i.e. minus panels)
 }
 
 impl WinMgr {
@@ -34,6 +60,7 @@ impl WinMgr {
     /// let wm = WinMgr::connect().unwrap();
     /// ```
     pub(crate) fn connect() -> WmCtlResult<Self> {
+        debug!("connect: initializing connection...");
         let (conn, screen) = x11rb::connect(None)?;
 
         // Get the screen size
@@ -42,8 +69,8 @@ impl WinMgr {
             (screen.width_in_pixels as u32, screen.height_in_pixels as u32, screen.root)
         };
 
-        // Populate the supported functions cache
-        let (atoms, supported) = WinMgr::init_caching(&conn, root)?;
+        // Populate the atoms collection cache
+        let atoms = AtomCollection::new(&conn)?.reply()?;
 
         // Create the window manager object
         let mut wm = WinMgr {
@@ -51,7 +78,7 @@ impl WinMgr {
             name: Default::default(),
             conn,
             atoms,
-            supported,
+            supported: Default::default(),
             screen,
             root,
             width,
@@ -71,9 +98,27 @@ impl WinMgr {
         wm.work_height = height as u32;
         wm.desktops = wm.desktops()?;
         wm.compositing = wm.compositing()?;
+        wm.supported = wm.supported()?;
 
         debug!("connect: screen: {}, root: {}, w: {}, h: {}", screen, root, width, height);
         Ok(wm)
+    }
+
+    /// Convert the given Atom id into an Atom name
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.atom_name(1234).unwrap()
+    /// ```
+    pub(crate) fn atom_name(&self, id: u32) -> WmCtlResult<String> {
+        let reply = self.conn.get_atom_name(id)?.reply()?;
+        if let Ok(value) = str::from_utf8(&reply.name) {
+            debug!("atom_name: id: {}, name: {}", id, value.to_owned());
+            return Ok(value.to_owned());
+        }
+        return Ok("".to_string());
     }
 
     /// Get window manager's informational properties
@@ -93,6 +138,7 @@ impl WinMgr {
             screen_size: (self.width, self.height),
             desktops: self.desktops,
             compositing: self.compositing,
+            supported: self.supported.clone(),
         })
     }
 
@@ -121,7 +167,30 @@ impl WinMgr {
         Ok(win)
     }
 
-    /// Determine if the given function is supported by the window manager
+    /// Get the Window Managers supported functions.
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// let supported = wm.supported();
+    /// ```
+    pub(crate) fn supported(&self) -> WmCtlResult<HashMap<u32, String>> {
+        let mut supported = HashMap::<u32, String>::new();
+        let reply = self
+            .conn
+            .get_property(false, self.root, self.atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?
+            .reply()?;
+        for atom_id in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
+            let atom_name = self.atom_name(atom_id)?;
+            trace!("supported: id={}, name={}", atom_id, atom_name);
+            supported.insert(atom_id, atom_name);
+        }
+        Ok(supported)
+    }
+
+    /// Determine if the given function is supported by the window manager. This will check the
+    /// cached set of Window Manager's supported functions for a match.
     ///
     /// ### Arguments
     /// * `atom` - atom to lookup to see if its supported
@@ -133,7 +202,7 @@ impl WinMgr {
     /// wm.supported(wm.atoms._NET_MOVERESIZE_WINDOW);
     /// ```
     #[allow(dead_code)]
-    pub(crate) fn supported(&self, atom: u32) -> bool {
+    pub(crate) fn is_supported(&self, atom: u32) -> bool {
         self.supported.get(&atom).is_some()
     }
 
@@ -382,7 +451,9 @@ impl WinMgr {
         Ok(desktop as i32)
     }
 
-    /// Get window geometry
+    /// Get window geometry.
+    /// * Geometry is for the app window not including the window manager borders
+    /// * Total window size and location is geometry + borders
     ///
     /// ### Arguments
     /// * `id` - id of the window to manipulate
@@ -397,16 +468,28 @@ impl WinMgr {
         // The returned x, y location is relative to its parent window making the values completely
         // useless. However using `translate_coordinates` we can have the window manager map those
         // useless values into real world cordinates by passing it the root as the relative window.
-
-        // Get width and heith and useless relative location values
         let g = self.conn.get_geometry(id)?.reply()?;
+        let (w, h) = (g.width as u32, g.height as u32);
+        println!("before trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, g.x, g.y, w, h);
+        let tx = self.conn.translate_coordinates(id, self.root, g.x, g.y)?.reply()?;
+        let (x, y) = (tx.dst_x as i32, tx.dst_y as i32);
+        println!("after trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
 
-        // Translate the useless retative location values to to real world values
-        let t = self.conn.translate_coordinates(id, self.root, g.x, g.y)?.reply()?;
+        // Account for borders added by the window manager or semi-transparent shadows added by
+        // GNOME applications to get the true size and position of the window from a visual
+        // human understandable perspective as you would see it on the screen.
+        let (l, r, t, b) = self.window_borders(id)?;
+        let (x, y, w, h) = if l != 0 || r != 0 || t != 0 || b != 0 {
+            let (x, y, w, h) = (x - l as i32, y - t as i32, w + l + r, h + t + b);
+            println!("win_borders: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
+            (x, y, w, h)
+        } else {
+            let (l, r, t, b) = self.window_gnome_borders(id)?;
+            (x + l as i32, y + t as i32, w - (l + r), h - (t + b))
+        };
 
-        let (x, y, w, h) = (t.dst_x, t.dst_y, g.width, g.height);
-        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
-        Ok((x as i32, y as i32, w as u32, h as u32))
+        println!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
+        Ok((x, y, w, h))
     }
 
     /// Get window frame border values added by the window manager
@@ -422,6 +505,38 @@ impl WinMgr {
     /// let (l, r, t, b) = wm.window_borders().unwrap();
     /// ```
     pub(crate) fn window_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
+        // Window managers decorate windows with boarders and title bars. The _NET_FRAME_EXTENTS
+        // defined as: left, right, top, bottom, CARDINAL[4]/32 will retrieve these values via
+        // `get_property` api call with the use of the `self.atoms._NET_FRAME_EXTENTS`
+        // request message with a `AtomEnum::CARDINAL` type response and we can use the
+        // `reply.value32()`.
+        let reply = self
+            .conn
+            .get_property(false, id, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?
+            .reply()?;
+        let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS".to_owned()))?;
+        let l = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS left".to_owned()))?;
+        let r = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS right".to_owned()))?;
+        let t = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS top".to_owned()))?;
+        let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
+
+        debug!("win_borders: id: {}, l: {}, r: {}, t: {}, b: {}", id, l, r, t, b);
+        Ok((l, r, t, b))
+    }
+
+    /// Get GNOME window borders
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// let win = window(12345);
+    /// let (l, r, t, b) = wm.window_gnome_borders().unwrap();
+    /// ```
+    pub(crate) fn window_gnome_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
         // Window managers (a.k.a server-side) decorate windows with boarders and title bars. The
         // _NET_FRAME_EXTENTS defined as: left, right, top, bottom, CARDINAL[4]/32 will retrieve
         // these values via `get_property` api call with the use of the `self.atoms._NET_FRAME_EXTENTS`
@@ -439,14 +554,21 @@ impl WinMgr {
         // which would mean that the window geometry is actually 1280-23-23x1415-15-31 or 1234x1369.
         let reply = self
             .conn
-            .get_property(false, id, self.atoms._NET_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?
+            .get_property(false, id, self.atoms._GTK_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?
             .reply()?;
-        let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS".to_owned()))?;
-        let l = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS left".to_owned()))?;
-        let r = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS right".to_owned()))?;
-        let t = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS top".to_owned()))?;
-        let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
-        debug!("win_borders: id: {}, l: {}, r: {}, t: {}, b: {}", id, l, r, t, b);
+
+        // Don't abort if the property is not found as its not required
+        if reply.value.is_empty() {
+            return Ok((0, 0, 0, 0));
+        }
+
+        let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_GTK_FRAME_EXTENTS".to_owned()))?;
+        let l = values.next().ok_or(WmCtlError::PropertyNotFound("_GTK_FRAME_EXTENTS left".to_owned()))?;
+        let r = values.next().ok_or(WmCtlError::PropertyNotFound("_GTK_FRAME_EXTENTS right".to_owned()))?;
+        let t = values.next().ok_or(WmCtlError::PropertyNotFound("_GTK_FRAME_EXTENTS top".to_owned()))?;
+        let b = values.next().ok_or(WmCtlError::PropertyNotFound("_GTK_FRAME_EXTENTS bottom".to_owned()))?;
+
+        debug!("win_gnome_borders: id: {}, l: {}, r: {}, t: {}, b: {}", id, l, r, t, b);
         Ok((l, r, t, b))
     }
 
@@ -461,17 +583,34 @@ impl WinMgr {
     /// let wm = WinMgr::connect().unwrap();
     /// wm.active_win().unwrap();
     /// ```
-    pub(crate) fn window_properties(&self, id: u32) -> WmCtlResult<u32> {
-        let reply = self
-            .conn
-            .get_property(false, self.root, self.atoms._NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, u32::MAX)?
-            .reply()?;
-        let win = reply
-            .value32()
-            .and_then(|mut x| x.next())
-            .ok_or(WmCtlError::PropertyNotFound("_NET_ACTIVE_WINDOW".to_owned()))?;
-        debug!("active_win: {}", win);
-        Ok(win)
+    pub(crate) fn window_properties(&self, id: u32) -> WmCtlResult<()> {
+        //let reply = self.conn.list_properties(id)?.reply()?;
+
+        const COUNT: usize = 500;
+        let mut atoms = [Into::<u32>::into(AtomEnum::NONE); COUNT];
+
+        // Init names
+        let names = (0..COUNT).map(|i| format!("NAME{}", i)).collect::<Vec<_>>();
+        let cookies = names.iter().map(|name| self.conn.intern_atom(false, name.as_bytes())).collect::<Vec<_>>();
+        for (i, atom) in cookies.into_iter().enumerate() {
+            atoms[i] = atom?.reply()?.atom;
+        }
+
+        // let atom = self.conn.intern_atom(false, atom.as_bytes())?.reply()?.atom;
+
+        // for x in reply.atoms {
+        //     //let reply = self.conn.get_property(false, id, x, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
+        //     //println!("win_properties: id: {}, atom: {:?}, format: {}", id, x, reply.format);
+        // }
+
+        //-> Result<Cookie<'_, Self, ListPropertiesReply>, ConnectionError>
+        //    .reply()?;
+        // let win = reply
+        //     .value32()
+        //     .and_then(|mut x| x.next())
+        //     .ok_or(WmCtlError::PropertyNotFound("_NET_ACTIVE_WINDOW".to_owned()))?;
+        //debug!("active_win: {}", win);
+        Ok(())
     }
 
     /// Get window attribrtes
@@ -701,24 +840,6 @@ impl WinMgr {
             .ok_or(WmCtlError::PropertyNotFound("_NET_NUMBER_OF_DESKTOPS".to_owned()))?;
         debug!("desktops: {}", num);
         Ok(num)
-    }
-
-    // Initialize caching
-    fn init_caching(conn: &RustConnection, root: u32) -> WmCtlResult<(AtomCollection, HashMap<u32, bool>)> {
-        debug!("initializing caching...");
-
-        // Cache atoms
-        let atoms = AtomCollection::new(conn)?.reply()?;
-
-        // Cache supported functions
-        let mut supported = HashMap::<u32, bool>::new();
-        let reply = conn.get_property(false, root, atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
-        for atom in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
-            trace!("supported: {}", atom);
-            supported.insert(atom, true);
-        }
-        debug!("caching initialized");
-        Ok((atoms, supported))
     }
 
     /// Send the event ensuring that a flush is called and that the message was precisely

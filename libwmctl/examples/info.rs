@@ -1,9 +1,9 @@
 use libwmctl::prelude::*;
-use prettytable::{Cell, Row, Table};
+use prettytable::{format, Cell, Row, Table};
 
 fn main() {
     let wm = info().unwrap();
-    let win = window(None);
+    let win = active();
 
     println!("X11 Information");
     println!("-----------------------------------------------------------------------");
@@ -13,40 +13,24 @@ fn main() {
     println!("Work area:      {}x{}", wm.work_area.0, wm.work_area.1);
     println!("Screen Size:    {}x{}", wm.screen_size.0, wm.screen_size.1);
     println!("Desktops:       {}", wm.desktops);
+    println!("Active Window:  {}", win.id);
     println!();
 
-    println!("Active Window");
+    println!("Supported functions:");
     let mut table = Table::new();
-    table.add_row(Row::new(vec![
-        Cell::new("ID"),
-        Cell::new("DSK"),
-        Cell::new("PID"),
-        Cell::new("X"),
-        Cell::new("Y"),
-        Cell::new("W"),
-        Cell::new("H"),
-        Cell::new("BORDERS"),
-        Cell::new("TYPE"),
-        Cell::new("STATE"),
-        Cell::new("CLASS"),
-        Cell::new("NAME"),
-    ]));
+    table.set_format(
+        format::FormatBuilder::new()
+            .separator(format::LinePosition::Top, format::LineSeparator::new('-', '+', '+', '+'))
+            .separator(format::LinePosition::Title, format::LineSeparator::new('=', '+', '+', '+'))
+            .padding(1, 1)
+            .build(),
+    );
+    table.set_titles(Row::new(vec![Cell::new("NAME"), Cell::new("ID")]));
 
-    let (x, y, w, h) = win.geometry().unwrap_or((0, 0, 0, 0));
-    let (l, r, t, b) = win.borders().unwrap_or((0, 0, 0, 0));
-    table.add_row(Row::new(vec![
-        Cell::new(&win.id.to_string()),
-        Cell::new(&format!("{:>2}", win.desktop().unwrap_or(-1))),
-        Cell::new(&win.pid().unwrap_or(-1).to_string()),
-        Cell::new(&x.to_string()),
-        Cell::new(&y.to_string()),
-        Cell::new(&w.to_string()),
-        Cell::new(&h.to_string()),
-        Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
-        Cell::new(&win.kind().unwrap_or(WinKind::Invalid).to_string()),
-        Cell::new(&format!("{:?}", win.state().unwrap_or(vec![WinState::Invalid]))),
-        Cell::new(&win.class().unwrap_or("".to_owned())),
-        Cell::new(&win.name().unwrap_or("".to_owned())),
-    ]));
+    let mut atoms = wm.supported.iter().collect::<Vec<_>>();
+    atoms.sort_by(|a, b| a.1.cmp(b.1));
+    for atom in atoms.iter() {
+        table.add_row(Row::new(vec![Cell::new(&atom.1), Cell::new(&atom.0.to_string())]));
+    }
     table.printstd();
 }

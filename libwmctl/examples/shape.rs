@@ -2,5 +2,5 @@ use libwmctl::prelude::*;
 
 // Shape the active window as half the screen space and position left
 fn main() {
-    window(None).shape(Shape::Halfw).pos(Position::Left).place().unwrap();
+    active().shape(Shape::Halfw).pos(Position::Left).place().unwrap();
 }

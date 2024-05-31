@@ -1,5 +1,4 @@
-use std::{convert, fmt};
-
+use std::{collections::HashMap, convert, fmt};
 use x11rb::protocol::xproto;
 
 use crate::{atoms::AtomCollection, WmCtlError, WmCtlResult};
@@ -43,6 +42,7 @@ pub struct Info {
     pub work_area: (u32, u32),
     pub screen_size: (u32, u32),
     pub desktops: u32,
+    pub supported: HashMap<u32, String>,
 }
 
 /// WinGravity
