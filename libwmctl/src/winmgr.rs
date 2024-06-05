@@ -28,6 +28,7 @@ use tracing::{debug, trace};
 
 use x11rb::{
     connection::Connection,
+    cookie,
     protocol::xproto::{ConnectionExt as _, *},
     rust_connection::RustConnection,
 };
@@ -112,6 +113,7 @@ impl WinMgr {
     /// let wm = WinMgr::connect().unwrap();
     /// wm.atom_name(1234).unwrap()
     /// ```
+    #[allow(dead_code)]
     pub(crate) fn atom_name(&self, id: u32) -> WmCtlResult<String> {
         let reply = self.conn.get_atom_name(id)?.reply()?;
         if let Ok(value) = str::from_utf8(&reply.name) {
@@ -119,6 +121,32 @@ impl WinMgr {
             return Ok(value.to_owned());
         }
         return Ok("".to_string());
+    }
+
+    /// Convert the given Atom ids into Atom map of id => name. By doing this in bulk
+    /// it is far more efficient and faster than calling `atom_name` for each.
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.atom_map([1, 2, 3]).unwrap()
+    /// ```
+    pub(crate) fn atom_map(&self, ids: &[u32]) -> WmCtlResult<HashMap<u32, String>> {
+        let mut atoms = HashMap::<u32, String>::new();
+
+        // Faster and more efficient to send all requests before calling reply()
+        let cookies = ids.iter().map(|id| self.conn.get_atom_name(*id)).collect::<Vec<_>>();
+
+        // Now take the cookies and ids and process the replies
+        for (cookie, id) in cookies.into_iter().zip(ids.iter()) {
+            let reply = cookie?.reply()?;
+            if let Ok(name) = str::from_utf8(&reply.name) {
+                atoms.insert(*id, name.to_owned());
+                debug!("atom_names: id: {}, name: {}", id, name);
+            }
+        }
+        return Ok(atoms);
     }
 
     /// Get window manager's informational properties
@@ -167,7 +195,7 @@ impl WinMgr {
         Ok(win)
     }
 
-    /// Get the Window Managers supported functions.
+    /// Get the Window Manager's supported functions.
     ///
     /// ### Examples
     /// ```ignore
@@ -176,17 +204,13 @@ impl WinMgr {
     /// let supported = wm.supported();
     /// ```
     pub(crate) fn supported(&self) -> WmCtlResult<HashMap<u32, String>> {
-        let mut supported = HashMap::<u32, String>::new();
         let reply = self
             .conn
             .get_property(false, self.root, self.atoms._NET_SUPPORTED, AtomEnum::ATOM, 0, u32::MAX)?
             .reply()?;
-        for atom_id in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))? {
-            let atom_name = self.atom_name(atom_id)?;
-            trace!("supported: id={}, name={}", atom_id, atom_name);
-            supported.insert(atom_id, atom_name);
-        }
-        Ok(supported)
+        let ids =
+            reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_SUPPORTED".to_owned()))?.collect::<Vec<_>>();
+        self.atom_map(&ids)
     }
 
     /// Determine if the given function is supported by the window manager. This will check the
@@ -218,13 +242,9 @@ impl WinMgr {
     /// wm.windows(false).unwrap()
     /// ```
     pub(crate) fn windows(&self, all: bool) -> WmCtlResult<Vec<u32>> {
-        let mut windows = vec![];
-        if all {
+        Ok(if all {
             // All windows in the X11 system
-            let tree = self.conn.query_tree(self.root)?.reply()?;
-            for win in tree.children {
-                windows.push(win);
-            }
+            self.conn.query_tree(self.root)?.reply()?.children
         } else {
             // Window manager client windows which is a subset of all windows that have been
             // reparented i.e. new ids and don't map to the same ids as their all windows selves.
@@ -232,11 +252,9 @@ impl WinMgr {
                 .conn
                 .get_property(false, self.root, self.atoms._NET_CLIENT_LIST, AtomEnum::WINDOW, 0, u32::MAX)?
                 .reply()?;
-            for win in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_CLIENT_LIST".to_owned()))? {
-                windows.push(win)
-            }
-        }
-        Ok(windows)
+            let children = reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_CLIENT_LIST".to_owned()))?;
+            children.collect::<Vec<_>>()
+        })
     }
 
     /// Get window pid
@@ -465,9 +483,11 @@ impl WinMgr {
     /// let (x, y, w, h) = wm.window_geometry(1234).unwrap()
     /// ```
     pub(crate) fn window_geometry(&self, id: u32) -> WmCtlResult<(i32, i32, u32, u32)> {
-        // The returned x, y location is relative to its parent window making the values completely
-        // useless. However using `translate_coordinates` we can have the window manager map those
-        // useless values into real world cordinates by passing it the root as the relative window.
+        // The returned x, y location is relative to the upper-left corner of its parent window
+        // making the values completely useless as it doesn't relate to the screen. However using
+        // `translate_coordinates` we can have the window manager map those useless values into
+        // real world cordinates (i.e. relative to 0,0 of the screen) by passing it the root as the
+        // relative window.
         let g = self.conn.get_geometry(id)?.reply()?;
         let (w, h) = (g.width as u32, g.height as u32);
         println!("before trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, g.x, g.y, w, h);
@@ -584,32 +604,29 @@ impl WinMgr {
     /// wm.active_win().unwrap();
     /// ```
     pub(crate) fn window_properties(&self, id: u32) -> WmCtlResult<()> {
-        //let reply = self.conn.list_properties(id)?.reply()?;
+        let reply = self.conn.list_properties(id)?.reply()?;
 
-        const COUNT: usize = 500;
-        let mut atoms = [Into::<u32>::into(AtomEnum::NONE); COUNT];
+        // Standard properties
+        // WM_CLASS	            STRING	        8	the section called “WM_CLASS Property”
+        // WM_CLIENT_MACHINE	TEXT	 	        the section called “WM_CLIENT_MACHINE Property”
+        // WM_COLORMAP_WINDOWS	WINDOW	        32	the section called “WM_COLORMAP_WINDOWS Property”
+        // WM_HINTS	            WM_HINTS	    32	the section called “WM_HINTS Property”
+        // WM_ICON_NAME	        TEXT	 	        the section called “WM_ICON_NAME Property”
+        // WM_ICON_SIZE	        WM_ICON_SIZE    32	the section called “WM_ICON_SIZE Property”
+        // WM_NAME	            TEXT	 	        the section called “WM_NAME Property”
+        // WM_NORMAL_HINTS	    WM_SIZE_HINTS	32	the section called “WM_NORMAL_HINTS Property”
+        // WM_PROTOCOLS	        ATOM	        32	the section called “WM_PROTOCOLS Property”
+        // WM_STATE	            WM_STATE	    32	the section called “WM_STATE Property”
+        // WM_TRANSIENT_FOR	    WINDOW	        32	the section called “WM_TRANSIENT_FOR Property”
 
-        // Init names
-        let names = (0..COUNT).map(|i| format!("NAME{}", i)).collect::<Vec<_>>();
-        let cookies = names.iter().map(|name| self.conn.intern_atom(false, name.as_bytes())).collect::<Vec<_>>();
-        for (i, atom) in cookies.into_iter().enumerate() {
-            atoms[i] = atom?.reply()?.atom;
+        // Sort atoms
+        let atom_map = self.atom_map(&reply.atoms)?;
+        let mut atoms = atom_map.iter().collect::<Vec<_>>();
+        atoms.sort_by(|a, b| a.1.cmp(b.1));
+        for atom in atoms.iter() {
+            //for (id, name) in atom_map.iter() {
+            println!("win_properties: id: {}, name: {}", atom.0, atom.1);
         }
-
-        // let atom = self.conn.intern_atom(false, atom.as_bytes())?.reply()?.atom;
-
-        // for x in reply.atoms {
-        //     //let reply = self.conn.get_property(false, id, x, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
-        //     //println!("win_properties: id: {}, atom: {:?}, format: {}", id, x, reply.format);
-        // }
-
-        //-> Result<Cookie<'_, Self, ListPropertiesReply>, ConnectionError>
-        //    .reply()?;
-        // let win = reply
-        //     .value32()
-        //     .and_then(|mut x| x.next())
-        //     .ok_or(WmCtlError::PropertyNotFound("_NET_ACTIVE_WINDOW".to_owned()))?;
-        //debug!("active_win: {}", win);
         Ok(())
     }
 

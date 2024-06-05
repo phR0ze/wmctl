@@ -117,7 +117,7 @@ pub fn first_by_class(class: &str) -> Option<Window> {
     windows
         .unwrap()
         .iter()
-        .find(|x| x.class().unwrap_or("".to_string()) == class)
+        .find(|x| x.class().unwrap_or("".to_string()).to_lowercase() == class.to_lowercase())
         .map_or(None, |x| Some(x.clone()))
 }
 
