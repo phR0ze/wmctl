@@ -376,7 +376,7 @@ impl WinMgr {
     /// let wm = WinMgr::connect().unwrap();
     /// wm.window_kind(1234)
     /// ```
-    pub(crate) fn window_kind(&self, id: u32) -> WmCtlResult<WinKind> {
+    pub(crate) fn window_kind(&self, id: u32) -> WmCtlResult<Kind> {
         // Defined as: _NET_WM_WINDOW_TYPE, ATOM[]/32
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_WINDOW_TYPE`
         // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
@@ -389,7 +389,7 @@ impl WinMgr {
             .value32()
             .and_then(|mut x| x.next())
             .ok_or(WmCtlError::PropertyNotFound("_NET_WM_WINDOW_TYPE".to_owned()))?;
-        let _kind = WinKind::from(&self.atoms, typ)?;
+        let _kind = Kind::from(&self.atoms, typ)?;
         debug!("win_kind: id: {}, kind: {:?}", id, _kind);
         Ok(_kind)
     }
@@ -405,7 +405,7 @@ impl WinMgr {
     /// let wm = WinMgr::connect().unwrap();
     /// wm.window_state(1234)
     /// ```
-    pub(crate) fn window_state(&self, id: u32) -> WmCtlResult<Vec<WinState>> {
+    pub(crate) fn window_state(&self, id: u32) -> WmCtlResult<Vec<State>> {
         // Defined as: _NET_WM_STATE, ATOM[]
         // which means when retrieving the value via `get_property` that we need to use a `self.atoms._NET_WM_STATE`
         // request message with a `AtomEnum::ATOM` type response and we can use the `reply.value32()` accessor to
@@ -415,7 +415,7 @@ impl WinMgr {
 
         let mut states = vec![];
         for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
-            let state = WinState::from(&self.atoms, state)?;
+            let state = State::from(&self.atoms, state)?;
             states.push(state);
         }
         debug!("win_state: id: {}, state: {:?}", id, states);
@@ -642,13 +642,13 @@ impl WinMgr {
     /// let (class, state) = wm.win_attributes(12345).unwrap();
     /// ```
     #[allow(dead_code)]
-    pub(crate) fn window_attributes(&self, id: u32) -> WmCtlResult<(WinClass, crate::MapState)> {
+    pub(crate) fn window_attributes(&self, id: u32) -> WmCtlResult<(Class, crate::MapState)> {
         let attr = self.conn.get_window_attributes(id)?.reply()?;
         debug!(
             "win_attributes: id: {}, win_gravity: {:?}, bit_gravity: {:?}",
             id, attr.win_gravity, attr.bit_gravity
         );
-        Ok((WinClass::from(attr.class.into())?, crate::MapState::from(attr.map_state.into())?))
+        Ok((Class::from(attr.class.into())?, crate::MapState::from(attr.map_state.into())?))
     }
 
     /// Maximize the window both horizontally and vertically

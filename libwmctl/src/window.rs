@@ -72,7 +72,7 @@ impl Window {
     /// let win = window(12345);
     /// let kind = win.kind().unwrap();
     /// ```
-    pub fn kind(&self) -> WmCtlResult<WinKind> {
+    pub fn kind(&self) -> WmCtlResult<Kind> {
         WM().read().unwrap().window_kind(self.id)
     }
 
@@ -84,7 +84,7 @@ impl Window {
     /// let win = window(12345);
     /// let state = win.state().unwrap();
     /// ```
-    pub fn state(&self) -> WmCtlResult<Vec<WinState>> {
+    pub fn state(&self) -> WmCtlResult<Vec<State>> {
         WM().read().unwrap().window_state(self.id)
     }
 
@@ -170,7 +170,7 @@ impl Window {
     /// win.maximized()
     /// ```
     pub fn maximized(&self) -> bool {
-        self.state().is_ok_and(|states| states.contains(&WinState::MaxVert) || states.contains(&WinState::MaxHorz))
+        self.state().is_ok_and(|states| states.contains(&State::MaxVert) || states.contains(&State::MaxHorz))
     }
 
     /// Remove the MaxVert and MaxHorz states
@@ -371,7 +371,7 @@ fn translate_shape(
                     if h >= fh {
                         h = fh
                     }
-                    (Some(WinGravity::Center.into()), Some(w), Some(h))
+                    (Some(Gravity::Center.into()), Some(w), Some(h))
                 },
 
                 // Half width x full height
@@ -416,7 +416,7 @@ fn translate_shape(
                     if h < 100.0 {
                         h = 100.0
                     }
-                    (Some(WinGravity::Center.into()), Some(w as u32 + bw), Some(h as u32 + bh))
+                    (Some(Gravity::Center.into()), Some(w as u32 + bw), Some(h as u32 + bh))
                 },
 
                 // Use the static size provided

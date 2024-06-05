@@ -4,7 +4,7 @@ use std::fmt;
 /// WinType provides an easy way to identify the different window types
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinKind {
+pub enum Kind {
     Combo,
     Desktop,
     Dialog,
@@ -23,36 +23,36 @@ pub enum WinKind {
 }
 
 // Convert from u32 to Type
-impl WinKind {
-    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinKind> {
+impl Kind {
+    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<Kind> {
         if val == atoms._NET_WM_WINDOW_TYPE_COMBO {
-            Ok(WinKind::Combo)
+            Ok(Kind::Combo)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DESKTOP {
-            Ok(WinKind::Desktop)
+            Ok(Kind::Desktop)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DIALOG {
-            Ok(WinKind::Dialog)
+            Ok(Kind::Dialog)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DND {
-            Ok(WinKind::DND)
+            Ok(Kind::DND)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DOCK {
-            Ok(WinKind::Dock)
+            Ok(Kind::Dock)
         } else if val == atoms._NET_WM_WINDOW_TYPE_DROPDOWN_MENU {
-            Ok(WinKind::DropDownMenu)
+            Ok(Kind::DropDownMenu)
         } else if val == atoms._NET_WM_WINDOW_TYPE_MENU {
-            Ok(WinKind::Menu)
+            Ok(Kind::Menu)
         } else if val == atoms._NET_WM_WINDOW_TYPE_NORMAL {
-            Ok(WinKind::Normal)
+            Ok(Kind::Normal)
         } else if val == atoms._NET_WM_WINDOW_TYPE_NOTIFICATION {
-            Ok(WinKind::Notification)
+            Ok(Kind::Notification)
         } else if val == atoms._NET_WM_WINDOW_TYPE_POPUP_MENU {
-            Ok(WinKind::PopupMenu)
+            Ok(Kind::PopupMenu)
         } else if val == atoms._NET_WM_WINDOW_TYPE_SPLASH {
-            Ok(WinKind::Splash)
+            Ok(Kind::Splash)
         } else if val == atoms._NET_WM_WINDOW_TYPE_TOOLBAR {
-            Ok(WinKind::Toolbar)
+            Ok(Kind::Toolbar)
         } else if val == atoms._NET_WM_WINDOW_TYPE_TOOLTIP {
-            Ok(WinKind::ToolTip)
+            Ok(Kind::ToolTip)
         } else if val == atoms._NET_WM_WINDOW_TYPE_UTILITY {
-            Ok(WinKind::Utility)
+            Ok(Kind::Utility)
         } else {
             Err(WmCtlError::InvalidWinType(val).into())
         }
@@ -60,10 +60,10 @@ impl WinKind {
 }
 
 // Implement format! support
-impl fmt::Display for WinKind {
+impl fmt::Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WinKind::Invalid => write!(f, ""),
+            Kind::Invalid => write!(f, ""),
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
     }

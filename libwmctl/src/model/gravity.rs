@@ -8,13 +8,13 @@ use std::fmt;
 /// Gravity is defined as the lower byte of the move resize flags 32bit value
 /// <https://tronche.com/gui/x/xlib/window/attributes/gravity.html>
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinGravity {
+pub enum Gravity {
     Unmap,
     Center,
 }
 
 // Implement format! support
-impl fmt::Display for WinGravity {
+impl fmt::Display for Gravity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
@@ -22,20 +22,20 @@ impl fmt::Display for WinGravity {
     }
 }
 
-impl From<u32> for WinGravity {
+impl From<u32> for Gravity {
     fn from(val: u32) -> Self {
         match val {
-            5 => WinGravity::Center,
-            _ => WinGravity::Unmap,
+            5 => Gravity::Center,
+            _ => Gravity::Unmap,
         }
     }
 }
 
-impl From<WinGravity> for u32 {
-    fn from(val: WinGravity) -> Self {
+impl From<Gravity> for u32 {
+    fn from(val: Gravity) -> Self {
         match val {
-            WinGravity::Center => 5,
-            WinGravity::Unmap => 0,
+            Gravity::Center => 5,
+            Gravity::Unmap => 0,
         }
     }
 }

@@ -4,7 +4,7 @@ use std::fmt;
 /// WinState provides an easy way to identify the different window states
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum WinState {
+pub enum State {
     Above,
     Below,
     DemandsAttention,
@@ -21,32 +21,32 @@ pub enum WinState {
 }
 
 // Convert from u32 to State
-impl WinState {
-    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<WinState> {
+impl State {
+    pub fn from(atoms: &AtomCollection, val: u32) -> WmCtlResult<State> {
         if val == atoms._NET_WM_STATE_ABOVE {
-            Ok(WinState::Above)
+            Ok(State::Above)
         } else if val == atoms._NET_WM_STATE_BELOW {
-            Ok(WinState::Below)
+            Ok(State::Below)
         } else if val == atoms._NET_WM_STATE_DEMANDS_ATTENTION {
-            Ok(WinState::DemandsAttention)
+            Ok(State::DemandsAttention)
         } else if val == atoms._NET_WM_STATE_FOCUSED {
-            Ok(WinState::Focused)
+            Ok(State::Focused)
         } else if val == atoms._NET_WM_STATE_FULLSCREEN {
-            Ok(WinState::Fullscreen)
+            Ok(State::Fullscreen)
         } else if val == atoms._NET_WM_STATE_HIDDEN {
-            Ok(WinState::Hidden)
+            Ok(State::Hidden)
         } else if val == atoms._NET_WM_STATE_MAXIMIZED_VERT {
-            Ok(WinState::MaxVert)
+            Ok(State::MaxVert)
         } else if val == atoms._NET_WM_STATE_MAXIMIZED_HORZ {
-            Ok(WinState::MaxHorz)
+            Ok(State::MaxHorz)
         } else if val == atoms._NET_WM_STATE_MODAL {
-            Ok(WinState::Modal)
+            Ok(State::Modal)
         } else if val == atoms._NET_WM_STATE_SHADED {
-            Ok(WinState::Shaded)
+            Ok(State::Shaded)
         } else if val == atoms._NET_WM_STATE_SKIP_PAGER {
-            Ok(WinState::SkipPager)
+            Ok(State::SkipPager)
         } else if val == atoms._NET_WM_STATE_SKIP_TASKBAR {
-            Ok(WinState::SkipTaskbar)
+            Ok(State::SkipTaskbar)
         } else {
             Err(WmCtlError::InvalidWinState(val).into())
         }
@@ -54,10 +54,10 @@ impl WinState {
 }
 
 // Implement format! support
-impl fmt::Display for WinState {
+impl fmt::Display for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WinState::Invalid => write!(f, ""),
+            State::Invalid => write!(f, ""),
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
     }

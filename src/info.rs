@@ -43,8 +43,8 @@ pub fn list() -> WmCtlResult<()> {
         Cell::new(&w.to_string()),
         Cell::new(&h.to_string()),
         Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
-        Cell::new(&win.kind().unwrap_or(WinKind::Invalid).to_string()),
-        Cell::new(&format!("{:?}", win.state().unwrap_or(vec![WinState::Invalid]))),
+        Cell::new(&win.kind().unwrap_or(Kind::Invalid).to_string()),
+        Cell::new(&format!("{:?}", win.state().unwrap_or(vec![State::Invalid]))),
         Cell::new(&win.class().unwrap_or("".to_owned())),
         Cell::new(&win.name().unwrap_or("".to_owned())),
     ]));
