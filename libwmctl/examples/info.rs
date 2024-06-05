@@ -16,7 +16,7 @@ fn main() {
     println!("Active Window:  {}", win.id);
     println!();
 
-    println!("Supported functions:");
+    println!("Window Manager Supported Functions:");
     let mut table = Table::new();
     table.set_format(
         format::FormatBuilder::new()

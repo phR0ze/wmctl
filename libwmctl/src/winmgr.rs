@@ -642,13 +642,13 @@ impl WinMgr {
     /// let (class, state) = wm.win_attributes(12345).unwrap();
     /// ```
     #[allow(dead_code)]
-    pub(crate) fn window_attributes(&self, id: u32) -> WmCtlResult<(WinClass, WinMap)> {
+    pub(crate) fn window_attributes(&self, id: u32) -> WmCtlResult<(WinClass, crate::MapState)> {
         let attr = self.conn.get_window_attributes(id)?.reply()?;
         debug!(
             "win_attributes: id: {}, win_gravity: {:?}, bit_gravity: {:?}",
             id, attr.win_gravity, attr.bit_gravity
         );
-        Ok((WinClass::from(attr.class.into())?, WinMap::from(attr.map_state.into())?))
+        Ok((WinClass::from(attr.class.into())?, crate::MapState::from(attr.map_state.into())?))
     }
 
     /// Maximize the window both horizontally and vertically
