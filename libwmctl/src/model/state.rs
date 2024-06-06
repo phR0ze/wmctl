@@ -1,7 +1,7 @@
 use crate::{atoms::AtomCollection, WmCtlError, WmCtlResult};
 use std::fmt;
 
-/// WinState provides an easy way to identify the different window states
+/// State provides an easy way to identify the different window states
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {

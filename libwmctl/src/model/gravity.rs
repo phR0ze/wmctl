@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// WinGravity
+/// Gravity
 /// When windows are resized, subwindows may be repositioned automatically relative to some position
 /// in the window. This attraction of a subwindow to some part of its parent is known as window
 /// gravity.

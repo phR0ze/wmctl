@@ -2,7 +2,7 @@ use crate::{WmCtlError, WmCtlResult};
 use std::fmt;
 use x11rb::protocol::xproto;
 
-/// WinClass provides a easy way to identify the different window class types
+/// Class provides a easy way to identify the different window class types
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Class {

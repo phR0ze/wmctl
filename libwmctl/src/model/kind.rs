@@ -1,7 +1,7 @@
 use crate::{atoms::AtomCollection, WmCtlError, WmCtlResult};
 use std::fmt;
 
-/// WinType provides an easy way to identify the different window types
+/// Kind provides an easy way to identify the different window types
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Kind {

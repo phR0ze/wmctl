@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-/// WinMgr provides information about the window manager and its environment.
+/// Info provides information about the window manager and its environment.
 pub struct Info {
     pub id: u32,
     pub name: String,

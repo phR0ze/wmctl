@@ -1,5 +1,5 @@
-use std::fmt;
 use std::error::Error as StdError;
+use std::fmt;
 
 /// `WmCtlResult<T>` provides a simplified result type with a common error type
 pub type WmCtlResult<T> = std::result::Result<T, ErrorWrapper>;
@@ -150,6 +150,5 @@ impl From<x11rb::errors::ReplyError> for ErrorWrapper {
 mod tests {
 
     #[test]
-    fn test_errors() {
-    }
+    fn test_errors() {}
 }

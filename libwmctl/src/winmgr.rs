@@ -592,19 +592,21 @@ impl WinMgr {
         Ok((l, r, t, b))
     }
 
-    /// Get all properties for the given window
+    /// Get all properties for the given window as a sorted list
     ///
     /// ### Arguments
-    /// * `id` - id of the window to manipulate
+    /// * `id` - id of the window to pull properteries for
     ///
     /// ### Examples
     /// ```ignore
     /// use libwmctl::prelude::*;
     /// let wm = WinMgr::connect().unwrap();
-    /// wm.active_win().unwrap();
+    /// wm.window_properties(1234).unwrap();
     /// ```
-    pub(crate) fn window_properties(&self, id: u32) -> WmCtlResult<()> {
+    pub(crate) fn window_properties(&self, id: u32) -> WmCtlResult<Vec<crate::Property>> {
         let reply = self.conn.list_properties(id)?.reply()?;
+
+        // X11 protocol properties
 
         // Standard properties
         // WM_CLASS	            STRING	        8	the section called “WM_CLASS Property”
@@ -619,15 +621,13 @@ impl WinMgr {
         // WM_STATE	            WM_STATE	    32	the section called “WM_STATE Property”
         // WM_TRANSIENT_FOR	    WINDOW	        32	the section called “WM_TRANSIENT_FOR Property”
 
-        // Sort atoms
+        // Get atoms names
         let atom_map = self.atom_map(&reply.atoms)?;
-        let mut atoms = atom_map.iter().collect::<Vec<_>>();
-        atoms.sort_by(|a, b| a.1.cmp(b.1));
-        for atom in atoms.iter() {
-            //for (id, name) in atom_map.iter() {
-            println!("win_properties: id: {}, name: {}", atom.0, atom.1);
-        }
-        Ok(())
+
+        // Create properties from the atoms and sort by name
+        let mut props = atom_map.iter().map(|x| crate::Property::new(*x.0, x.1)).collect::<Vec<_>>();
+        props.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(props)
     }
 
     /// Get window attribrtes
@@ -649,6 +649,23 @@ impl WinMgr {
             id, attr.win_gravity, attr.bit_gravity
         );
         Ok((Class::from(attr.class.into())?, crate::MapState::from(attr.map_state.into())?))
+    }
+
+    /// Map the window on the screen
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// wm.map_window().unwrap();
+    /// ```
+    pub(crate) fn map_window(&self, id: u32) -> WmCtlResult<()> {
+        debug!("map_window: id: {}", id);
+        self.conn.map_window(id)?;
+        Ok(())
     }
 
     /// Maximize the window both horizontally and vertically

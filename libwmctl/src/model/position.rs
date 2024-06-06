@@ -1,7 +1,7 @@
 use crate::WmCtlError;
 use std::{convert, fmt};
 
-/// WinPosition provides a number of pre-defined positions on the screen to quickly and easily
+/// Position provides a number of pre-defined positions on the screen to quickly and easily
 /// move the window to taking into account borders and taskbars automatically.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Position {

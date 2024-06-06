@@ -27,6 +27,7 @@ fn main() {
     );
     table.set_titles(Row::new(vec![Cell::new("NAME"), Cell::new("ID")]));
 
+    // Sort atoms by name
     let mut atoms = wm.supported.iter().collect::<Vec<_>>();
     atoms.sort_by(|a, b| a.1.cmp(b.1));
     for atom in atoms.iter() {

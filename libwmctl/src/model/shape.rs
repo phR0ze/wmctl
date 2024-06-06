@@ -1,7 +1,7 @@
 use crate::WmCtlError;
 use std::{convert, fmt};
 
-/// WinShape provides a number of pre-defined shapes to manipulate the window into, taking into
+/// Shape provides a number of pre-defined shapes to manipulate the window into, taking into
 /// account borders and taskbars automatically.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Shape {

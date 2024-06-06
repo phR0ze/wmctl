@@ -3,7 +3,7 @@ use x11rb::protocol::xproto;
 
 use crate::{WmCtlError, WmCtlResult};
 
-/// WinMap provides an easy way to identify the differnt window map values
+/// MapState provides an easy way to identify the differnt window map values
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum MapState {

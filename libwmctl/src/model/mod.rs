@@ -10,6 +10,7 @@ mod info;
 mod kind;
 mod map_state;
 mod position;
+mod property;
 mod shape;
 mod state;
 
@@ -20,6 +21,7 @@ pub use info::*;
 pub use kind::*;
 pub use map_state::*;
 pub use position::*;
+pub use property::*;
 pub use shape::*;
 pub use state::*;
 

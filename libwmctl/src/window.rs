@@ -144,9 +144,20 @@ impl Window {
     /// let win = window(12345);
     /// win.properties().unwrap();
     /// ```
-    pub fn properties(&self) -> WmCtlResult<()> {
-        WM().read().unwrap().window_properties(self.id)?;
-        Ok(())
+    pub fn properties(&self) -> WmCtlResult<Vec<Property>> {
+        WM().read().unwrap().window_properties(self.id)
+    }
+
+    /// Map the window to the screen
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// win.map().unwrap();
+    /// ```
+    pub fn map(&self) -> WmCtlResult<()> {
+        WM().read().unwrap().map_window(self.id)
     }
 
     /// Maximize the window both horizontally and vertically
