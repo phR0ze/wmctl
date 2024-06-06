@@ -15,6 +15,7 @@ pub fn windows(all: bool) -> Result<()> {
         Cell::new("W"),
         Cell::new("H"),
         Cell::new("BORDERS"),
+        Cell::new("PARENT"),
         Cell::new("TYPE"),
         Cell::new("STATE"),
         Cell::new("CLASS"),
@@ -33,8 +34,9 @@ pub fn windows(all: bool) -> Result<()> {
             Cell::new(&w.to_string()),
             Cell::new(&h.to_string()),
             Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
+            Cell::new(&format!("{}", win.parent().unwrap().id)),
             Cell::new(&win.kind().unwrap_or(Kind::Invalid).to_string()),
-            Cell::new(&format!("{:?}", win.state().unwrap_or(vec![State::Invalid]))),
+            Cell::new(&format!("{:?}", win.state().unwrap_or(vec![]))),
             Cell::new(&win.class().unwrap_or("".to_owned())),
             Cell::new(&win.name().unwrap_or("".to_owned())),
         ]));

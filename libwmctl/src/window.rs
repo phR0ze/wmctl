@@ -149,6 +149,10 @@ impl Window {
     }
 
     /// Map the window to the screen
+    /// * Windows are created in the unmapped state and must be mapped to be visible
+    /// * Unmapping the window will have the opposite effect of hidding the window
+    /// * Useful for new windows or dialogs that need to conditionally be visible
+    /// * It is much faster to hide and show and window rather than recreate it
     ///
     /// ### Examples
     /// ```ignore

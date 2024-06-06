@@ -5,19 +5,20 @@ use std::fmt;
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {
-    Above,
-    Below,
-    DemandsAttention,
-    Focused,
-    Fullscreen,
-    Hidden,
-    MaxVert,
-    MaxHorz,
-    Modal,
-    Shaded,
-    SkipPager,
-    SkipTaskbar,
-    Invalid, // made up value to track missing
+    Above,            // show the window above others
+    Below,            // show the window below others
+    DemandsAttention, // same as the urgent flag
+    Focused,          // the window has input focus
+    Fullscreen,       // show the window fullscreen
+    Hidden,           // the window is unmapped
+    MaxHorz,          // the window is maximized horizontally
+    MaxVert,          // the window is maximized vertically
+    Modal,            // the window is a modal dialog
+    Shaded,           // the window is rolled up
+    SkipPager,        // the window should not be shown on a pager
+    SkipTaskbar,      // the window should be ignored by a taskbar
+    Sticky,           // the window should be shown on all virtual desktops
+    Invalid,          // made up value to track missing
 }
 
 // Convert from u32 to State
@@ -35,10 +36,10 @@ impl State {
             Ok(State::Fullscreen)
         } else if val == atoms._NET_WM_STATE_HIDDEN {
             Ok(State::Hidden)
-        } else if val == atoms._NET_WM_STATE_MAXIMIZED_VERT {
-            Ok(State::MaxVert)
         } else if val == atoms._NET_WM_STATE_MAXIMIZED_HORZ {
             Ok(State::MaxHorz)
+        } else if val == atoms._NET_WM_STATE_MAXIMIZED_VERT {
+            Ok(State::MaxVert)
         } else if val == atoms._NET_WM_STATE_MODAL {
             Ok(State::Modal)
         } else if val == atoms._NET_WM_STATE_SHADED {
@@ -47,6 +48,8 @@ impl State {
             Ok(State::SkipPager)
         } else if val == atoms._NET_WM_STATE_SKIP_TASKBAR {
             Ok(State::SkipTaskbar)
+        } else if val == atoms._NET_WM_STATE_STICKY {
+            Ok(State::Sticky)
         } else {
             Err(WmCtlError::InvalidWinState(val).into())
         }

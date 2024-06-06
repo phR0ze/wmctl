@@ -418,7 +418,7 @@ impl WinMgr {
             let state = State::from(&self.atoms, state)?;
             states.push(state);
         }
-        debug!("win_state: id: {}, state: {:?}", id, states);
+        println!("win_state: id: {}, state: {:?}", id, states);
         Ok(states)
     }
 
@@ -471,7 +471,7 @@ impl WinMgr {
 
     /// Get window geometry.
     /// * Geometry is for the app window not including the window manager borders
-    /// * Total window size and location is geometry + borders
+    /// * Total window size is calculated by using the geometry + the window borders
     ///
     /// ### Arguments
     /// * `id` - id of the window to manipulate
@@ -483,30 +483,35 @@ impl WinMgr {
     /// let (x, y, w, h) = wm.window_geometry(1234).unwrap()
     /// ```
     pub(crate) fn window_geometry(&self, id: u32) -> WmCtlResult<(i32, i32, u32, u32)> {
+        // References
+        // * https://github.com/psychon/x11rb/blob/c55337f839fd03eeb77996b776a736fcf8136dd9/x11rb/examples/tutorial.rs#L1840
+        //
         // The returned x, y location is relative to the upper-left corner of its parent window
-        // making the values completely useless as it doesn't relate to the screen. However using
-        // `translate_coordinates` we can have the window manager map those useless values into
-        // real world cordinates (i.e. relative to 0,0 of the screen) by passing it the root as the
-        // relative window.
+        // making the values completely useless as it doesn't relate to what we see on the screen
+        // in an intuitive way. In order to overcome this problem, we need to take a two-step approach.
+        // First, we find out the Id of the parent window, which might not be the root window. We then
+        // translate the relative coordinates in relation to the parent window to get actual screen
+        // coordinates that have real world meaning relative to 0, 0 of the screen.
         let g = self.conn.get_geometry(id)?.reply()?;
         let (w, h) = (g.width as u32, g.height as u32);
-        println!("before trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, g.x, g.y, w, h);
-        let tx = self.conn.translate_coordinates(id, self.root, g.x, g.y)?.reply()?;
+        let parent = self.window_parent(id)?.id;
+        //println!("before trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, g.x, g.y, w, h);
+        let tx = self.conn.translate_coordinates(id, parent, g.x, g.y)?.reply()?;
         let (x, y) = (tx.dst_x as i32, tx.dst_y as i32);
-        println!("after trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
+        //println!("after trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
 
         // Account for borders added by the window manager or semi-transparent shadows added by
         // GNOME applications to get the true size and position of the window from a visual
         // human understandable perspective as you would see it on the screen.
-        let (l, r, t, b) = self.window_borders(id)?;
-        let (x, y, w, h) = if l != 0 || r != 0 || t != 0 || b != 0 {
-            let (x, y, w, h) = (x - l as i32, y - t as i32, w + l + r, h + t + b);
-            println!("win_borders: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
-            (x, y, w, h)
-        } else {
-            let (l, r, t, b) = self.window_gnome_borders(id)?;
-            (x + l as i32, y + t as i32, w - (l + r), h - (t + b))
-        };
+        // let (l, r, t, b) = self.window_borders(id)?;
+        // let (x, y, w, h) = if l != 0 || r != 0 || t != 0 || b != 0 {
+        //     let (x, y, w, h) = (x - l as i32, y - t as i32, w + l + r, h + t + b);
+        //     //println!("win_borders: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
+        //     (x, y, w, h)
+        // } else {
+        //     let (l, r, t, b) = self.window_gnome_borders(id)?;
+        //     (x + l as i32, y + t as i32, w - (l + r), h - (t + b))
+        // };
 
         println!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
         Ok((x, y, w, h))
@@ -718,6 +723,9 @@ impl WinMgr {
     pub(crate) fn move_resize_window(
         &self, id: u32, gravity: Option<u32>, x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>,
     ) -> WmCtlResult<()> {
+        // Alternatively I attempted to use the x11rb::protocol::xproto::ConfigureWindowAux option
+        // with the `configure_window`` function but the window was not moved or resized as expected.
+
         // Construct the move resize message
         // Gravity is defined as the lower byte of the move resize flags 32bit value
         // https://tronche.com/gui/x/xlib/window/attributes/gravity.html
