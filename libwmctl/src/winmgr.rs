@@ -24,11 +24,10 @@
 //
 use crate::{atoms::*, model::*, WmCtlError, WmCtlResult};
 use std::{collections::HashMap, str};
-use tracing::{debug, trace};
+use tracing::debug;
 
 use x11rb::{
     connection::Connection,
-    cookie,
     protocol::xproto::{ConnectionExt as _, *},
     rust_connection::RustConnection,
 };
@@ -132,6 +131,7 @@ impl WinMgr {
     /// let wm = WinMgr::connect().unwrap();
     /// wm.atom_map([1, 2, 3]).unwrap()
     /// ```
+    #[allow(dead_code)]
     pub(crate) fn atom_map(&self, ids: &[u32]) -> WmCtlResult<HashMap<u32, String>> {
         let mut atoms = HashMap::<u32, String>::new();
 
@@ -231,6 +231,8 @@ impl WinMgr {
     }
 
     /// Get windows optionally all
+    /// * when all is true for some reason the window state is not correctly returned
+    /// * when all is true the parent window is the root window for all windows
     ///
     /// ### Arguments
     /// * `all` - default is to get all windows controlled by the window manager, when all is true get the super set of x11 windows
@@ -414,11 +416,13 @@ impl WinMgr {
             self.conn.get_property(false, id, self.atoms._NET_WM_STATE, AtomEnum::ATOM, 0, u32::MAX)?.reply()?;
 
         let mut states = vec![];
-        for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
-            let state = State::from(&self.atoms, state)?;
-            states.push(state);
+        if reply.value_len > 0 {
+            for state in reply.value32().ok_or(WmCtlError::PropertyNotFound("_NET_WM_STATE".to_owned()))? {
+                let state = State::from(&self.atoms, state)?;
+                states.push(state);
+            }
+            debug!("win_state: id: {}, state: {:?}", id, states);
         }
-        println!("win_state: id: {}, state: {:?}", id, states);
         Ok(states)
     }
 
@@ -513,7 +517,7 @@ impl WinMgr {
         //     (x + l as i32, y + t as i32, w - (l + r), h - (t + b))
         // };
 
-        println!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
+        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
         Ok((x, y, w, h))
     }
 
@@ -561,6 +565,7 @@ impl WinMgr {
     /// let win = window(12345);
     /// let (l, r, t, b) = wm.window_gnome_borders().unwrap();
     /// ```
+    #[allow(dead_code)]
     pub(crate) fn window_gnome_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
         // Window managers (a.k.a server-side) decorate windows with boarders and title bars. The
         // _NET_FRAME_EXTENTS defined as: left, right, top, bottom, CARDINAL[4]/32 will retrieve
@@ -611,27 +616,15 @@ impl WinMgr {
     pub(crate) fn window_properties(&self, id: u32) -> WmCtlResult<Vec<crate::Property>> {
         let reply = self.conn.list_properties(id)?.reply()?;
 
-        // X11 protocol properties
-
-        // Standard properties
-        // WM_CLASS	            STRING	        8	the section called “WM_CLASS Property”
-        // WM_CLIENT_MACHINE	TEXT	 	        the section called “WM_CLIENT_MACHINE Property”
-        // WM_COLORMAP_WINDOWS	WINDOW	        32	the section called “WM_COLORMAP_WINDOWS Property”
-        // WM_HINTS	            WM_HINTS	    32	the section called “WM_HINTS Property”
-        // WM_ICON_NAME	        TEXT	 	        the section called “WM_ICON_NAME Property”
-        // WM_ICON_SIZE	        WM_ICON_SIZE    32	the section called “WM_ICON_SIZE Property”
-        // WM_NAME	            TEXT	 	        the section called “WM_NAME Property”
-        // WM_NORMAL_HINTS	    WM_SIZE_HINTS	32	the section called “WM_NORMAL_HINTS Property”
-        // WM_PROTOCOLS	        ATOM	        32	the section called “WM_PROTOCOLS Property”
-        // WM_STATE	            WM_STATE	    32	the section called “WM_STATE Property”
-        // WM_TRANSIENT_FOR	    WINDOW	        32	the section called “WM_TRANSIENT_FOR Property”
-
         // Get atoms names
         let atom_map = self.atom_map(&reply.atoms)?;
 
         // Create properties from the atoms and sort by name
         let mut props = atom_map.iter().map(|x| crate::Property::new(*x.0, x.1)).collect::<Vec<_>>();
         props.sort_by(|a, b| a.name.cmp(&b.name));
+        // for prop in props.iter() {
+        //     let reply = self.conn.get_property(false, id, prop.id, AtomEnum::CARDINAL, 0, u32::MAX)?.reply()?;
+        // }
         Ok(props)
     }
 
@@ -647,13 +640,14 @@ impl WinMgr {
     /// let (class, state) = wm.win_attributes(12345).unwrap();
     /// ```
     #[allow(dead_code)]
-    pub(crate) fn window_attributes(&self, id: u32) -> WmCtlResult<(Class, crate::MapState)> {
+    pub(crate) fn window_attributes(&self, id: u32) -> WmCtlResult<crate::MapState> {
         let attr = self.conn.get_window_attributes(id)?.reply()?;
         debug!(
             "win_attributes: id: {}, win_gravity: {:?}, bit_gravity: {:?}",
             id, attr.win_gravity, attr.bit_gravity
         );
-        Ok((Class::from(attr.class.into())?, crate::MapState::from(attr.map_state.into())?))
+        //Ok((Class::from(attr.class.into())?, crate::MapState::from(attr.map_state.into())?))
+        Ok(crate::MapState::from(attr.map_state.into())?)
     }
 
     /// Map the window on the screen

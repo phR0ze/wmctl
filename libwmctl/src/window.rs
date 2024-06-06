@@ -136,6 +136,31 @@ impl Window {
         WM().read().unwrap().window_borders(self.id)
     }
 
+    /// Get window GNOME border values added by GTK
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// let (l, r, t, b) = win.gtk_borders().unwrap();
+    /// ```
+    pub fn gtk_borders(&self) -> WmCtlResult<(u32, u32, u32, u32)> {
+        WM().read().unwrap().window_gnome_borders(self.id)
+    }
+
+    /// Get window mapped state
+    /// * doesn't return a valid state if all windows are included rather than just the managed ones
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let win = window(12345);
+    /// let state = win.mapped().unwrap();
+    /// ```
+    pub fn mapped(&self) -> WmCtlResult<MapState> {
+        WM().read().unwrap().window_attributes(self.id)
+    }
+
     /// Get all window properties generically
     ///
     /// ### Examples

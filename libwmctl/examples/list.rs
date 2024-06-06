@@ -3,9 +3,10 @@ use prettytable::{format, Cell, Row, Table};
 
 // List all windows
 fn main() {
-    let windows = windows(true).unwrap();
+    let windows = windows(false).unwrap();
     let mut table = Table::new();
     table.set_format(format::FormatBuilder::new().padding(1, 1).build());
+
     table.set_titles(Row::new(vec![
         Cell::new("ID"),
         Cell::new("DSK"),
@@ -36,8 +37,7 @@ fn main() {
             Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
             Cell::new(&format!("{}", win.parent().unwrap().id)),
             Cell::new(&win.kind().unwrap_or(Kind::Invalid).to_string()),
-            Cell::new(&format!("{:?}", win.state().unwrap())),
-            //Cell::new(&format!("{:?}", win.state().unwrap_or(vec![]))),
+            Cell::new(&format!("{:?}", win.state().unwrap_or(vec![]))),
             Cell::new(&win.class().unwrap_or("".to_owned())),
             Cell::new(&win.name().unwrap_or("".to_owned())),
         ]));

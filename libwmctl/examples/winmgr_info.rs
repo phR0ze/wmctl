@@ -5,7 +5,7 @@ fn main() {
     let wm = info().unwrap();
     let win = active();
 
-    println!("X11 Information");
+    println!("Window Manager Information");
     println!("-----------------------------------------------------------------------");
     println!("Window Manager: {}", wm.name);
     println!("Compositing:    {}", wm.compositing);
