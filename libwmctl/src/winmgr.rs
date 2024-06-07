@@ -796,41 +796,43 @@ impl WinMgr {
     /// win.move_resize_win(None, Some(0), Some(0), Some(500), Some(500)).unwrap();
     /// ```
     pub(crate) fn move_resize_window(
-        &self, id: u32, gravity: Option<u32>, x: Option<u32>, y: Option<u32>, w: Option<u32>, h: Option<u32>,
+        &self, id: u32, gravity: Option<u32>, x: Option<i32>, y: Option<i32>, w: Option<u32>, h: Option<u32>,
     ) -> WmCtlResult<()> {
-        // Alternatively I attempted to use the x11rb::protocol::xproto::ConfigureWindowAux option
-        // with the `configure_window`` function but the window was not moved or resized as expected.
+        self.conn.configure_window(id, &ConfigureWindowAux::new().x(x).y(y).width(w).height(h))?;
+        self.conn.flush()?; // Requires the flush to work
 
-        // Construct the move resize message
-        // Gravity is defined as the lower byte of the move resize flags 32bit value
-        // https://tronche.com/gui/x/xlib/window/attributes/gravity.html
-        // Defines how the window will shift as it grows or shrinks during a shape change operation.
-        // The default value is NorthWest which means that the window will grow to the right and down
-        // and will shrink up and left. By changing this to center you can get a more distributed growth
-        // or shrink perception.
-        let mut flags = gravity.unwrap_or(0);
+        // Old implementation below doesn't allow for negative (x, y) coordinates
+        // ----------------------------------------------------------------
+        // // Construct the move resize message
+        // // Gravity is defined as the lower byte of the move resize flags 32bit value
+        // // https://tronche.com/gui/x/xlib/window/attributes/gravity.html
+        // // Defines how the window will shift as it grows or shrinks during a shape change operation.
+        // // The default value is NorthWest which means that the window will grow to the right and down
+        // // and will shrink up and left. By changing this to center you can get a more distributed growth
+        // // or shrink perception.
+        // let mut flags = gravity.unwrap_or(0);
 
-        // Define the second byte of the move resize flags 32bit value
-        // Used to indicate that the associated value has been changed and needs to be acted upon
-        if x.is_some() {
-            flags |= MOVE_RESIZE_WINDOW_X;
-        }
-        if y.is_some() {
-            flags |= MOVE_RESIZE_WINDOW_Y;
-        }
-        if w.is_some() {
-            flags |= MOVE_RESIZE_WINDOW_WIDTH;
-        }
-        if h.is_some() {
-            flags |= MOVE_RESIZE_WINDOW_HEIGHT;
-        }
+        // // Define the second byte of the move resize flags 32bit value
+        // // Used to indicate that the associated value has been changed and needs to be acted upon
+        // if x.is_some() {
+        //     flags |= MOVE_RESIZE_WINDOW_X;
+        // }
+        // if y.is_some() {
+        //     flags |= MOVE_RESIZE_WINDOW_Y;
+        // }
+        // if w.is_some() {
+        //     flags |= MOVE_RESIZE_WINDOW_WIDTH;
+        // }
+        // if h.is_some() {
+        //     flags |= MOVE_RESIZE_WINDOW_HEIGHT;
+        // }
 
-        self.send_event(ClientMessageEvent::new(
-            32,
-            id,
-            self.atoms._NET_MOVERESIZE_WINDOW,
-            [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)],
-        ))?;
+        // self.send_event(ClientMessageEvent::new(
+        //     32,
+        //     id,
+        //     self.atoms._NET_MOVERESIZE_WINDOW,
+        //     [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)],
+        // ))?;
 
         debug!("move_resize: id: {}, g: {:?}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", id, gravity, x, y, w, h);
         Ok(())

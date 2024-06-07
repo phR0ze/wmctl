@@ -18,7 +18,7 @@ pub enum Position {
     RightCenter,
     TopCenter,
     BottomCenter,
-    Static(u32, u32),
+    Static(i32, i32),
 }
 
 // Implement format! support

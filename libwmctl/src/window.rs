@@ -303,7 +303,7 @@ impl Window {
         // Get window properties
         let (bl, br, bt, bb) = self.borders()?;
         let (cl, cr, ct, cb) = self.gtk_borders()?;
-        let (x, y, w, h) = self.visual_geometry()?;
+        let (x, y, w, h) = self.geometry()?;
         println!("debug 1: {}, {}, {}, {}", x, y, w, h);
         let size = Rect::new(w, h);
         let border = Rect::new(bl + br, bt + bb);
@@ -353,20 +353,17 @@ impl Window {
 /// * `(x, y)` cordinates or (None, None) for no change
 fn translate_pos(
     size: &Rect, border: &Rect, csd_border: &Rect, area: &Rect, pos: &Position,
-) -> WmCtlResult<(Option<u32>, Option<u32>)> {
+) -> WmCtlResult<(Option<i32>, Option<i32>)> {
     // Pre-calculating some commonly used values for the translation
-    //let csd = csd_border.w != 0 || csd_border.h != 0;
+    let csd = csd_border.w != 0 || csd_border.h != 0;
 
     // x center coordinate for left of window such that the window will appear horizontally centered
     //
-    // * if half the window+border is more than half the work area then it will be off the screen
-    //   so use 0 instead so that the window is flush with the edge and still usable.
-    // * else calculate half the work area minus half the window+border to get the x coordinate
-    //let fw = if csd { area.w + csd_border.w } else { area.w - border.w };
-    let cx = if (size.w + border.w) / 2 >= area.w / 2 {
-        0
+    // * calculate half the work area minus half the window+border to get the x coordinate
+    let cx = if csd {
+        (area.w as f32 / 2.0 - (size.w + border.w) as f32 / 2.0) as i32
     } else {
-        (area.w as f32 / 2.0 - (size.w + border.w) as f32 / 2.0) as u32
+        (area.w as f32 / 2.0 - (size.w + border.w) as f32 / 2.0) as i32
     };
 
     // y center coordinate for top of window such that the window will appear vertically centered
@@ -377,22 +374,26 @@ fn translate_pos(
     let cy = if (area.h + border.h) / 2 >= area.h / 2 {
         0
     } else {
-        (area.h as f32 / 2.0 - (size.h + border.h) as f32 / 2.0) as u32
+        (area.h as f32 / 2.0 - (size.h + border.h) as f32 / 2.0) as i32
     };
 
-    // x left coordinate for the window such that the window will appear all the way to the right
+    // left x coordinate for the window such that the window will appear all the way to the right
     //
     // * if the window+border is more than the work area then it will be off the screen
     //   so use 0 instead so that the window is flush with the edge and still usable.
     // * else calculate the window+border minus the work area to get the x coordinate
-    let lx = if size.w + border.w >= area.w { 0 } else { area.w - size.w - border.w };
+    let lx = if size.w + border.w >= area.w { 0 } else { (area.w - size.w - border.w) as i32 };
 
-    // y top coordinate for the window such that the window will appear all the way to the top
+    // top y coordinate for the window such that the window will appear all the way to the top
     //
-    // * if the window+border is more than the work area then it will be off the screen
-    //   so use 0 instead so that the window is flush with the edge and still usable.
-    // * else calculate the window+border minus the work area to get the y coordinate
-    let ty = if size.h + border.h >= area.h { 0 } else { area.h - size.h - border.h };
+    // * Window Manager decorated windows
+    //   * if the window+border is more than the work area then it will be off the screen
+    //     so use 0 instead so that the window is flush with the top edge and still usable.
+    //   * else calculate the window+border minus the work area to get the y coordinate
+    // * CSD windows
+    //   * in order to get the visual appearance of a window flush with the top edge we need
+    //   * we need subtract the CSD border amount which will place the window off screen.
+    let ty = if csd { 0 - csd_border.h as i32 } else { 0 };
 
     Ok(match pos {
         Position::Center => (Some(cx), Some(cy)),
@@ -612,8 +613,8 @@ mod tests {
             &Position::BottomCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
-        let ty = (ah - h - bh) as u32;
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(ty));
 
@@ -627,8 +628,8 @@ mod tests {
             &Position::BottomCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
-        let ty = (ah - h - bh) as u32;
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(ty));
     }
@@ -645,7 +646,7 @@ mod tests {
             &Position::TopCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(0));
 
@@ -659,7 +660,7 @@ mod tests {
             &Position::TopCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(0));
     }
@@ -676,8 +677,8 @@ mod tests {
             &Position::RightCenter,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        let lx = (aw - w - bw) as i32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, Some(cy));
 
@@ -691,8 +692,8 @@ mod tests {
             &Position::RightCenter,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        let lx = (aw - w - bw) as i32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, Some(cy));
     }
@@ -709,7 +710,7 @@ mod tests {
             &Position::LeftCenter,
         )
         .unwrap();
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
         assert_eq!(x, Some(0));
         assert_eq!(y, Some(cy));
 
@@ -723,7 +724,7 @@ mod tests {
             &Position::LeftCenter,
         )
         .unwrap();
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
         assert_eq!(x, Some(0));
         assert_eq!(y, Some(cy));
     }
@@ -740,8 +741,8 @@ mod tests {
             &Position::BottomRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
-        let ty = (ah - h - bh) as u32;
+        let lx = (aw - w - bw) as i32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, Some(ty));
 
@@ -755,8 +756,8 @@ mod tests {
             &Position::BottomRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
-        let ty = (ah - h - bh) as u32;
+        let lx = (aw - w - bw) as i32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, Some(ty));
     }
@@ -773,7 +774,7 @@ mod tests {
             &Position::BottomLeft,
         )
         .unwrap();
-        let ty = (ah - h - bh) as u32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, Some(0));
         assert_eq!(y, Some(ty));
 
@@ -787,7 +788,7 @@ mod tests {
             &Position::BottomLeft,
         )
         .unwrap();
-        let ty = (ah - h - bh) as u32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, Some(0));
         assert_eq!(y, Some(ty));
     }
@@ -804,7 +805,7 @@ mod tests {
             &Position::TopRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
+        let lx = (aw - w - bw) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, Some(0));
 
@@ -818,7 +819,7 @@ mod tests {
             &Position::TopRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
+        let lx = (aw - w - bw) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, Some(0));
     }
@@ -864,7 +865,7 @@ mod tests {
             &Position::Bottom,
         )
         .unwrap();
-        let ty = (ah - h - bh) as u32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, None);
         assert_eq!(y, Some(ty));
 
@@ -878,7 +879,7 @@ mod tests {
             &Position::Bottom,
         )
         .unwrap();
-        let ty = (ah - h - bh) as u32;
+        let ty = (ah - h - bh) as i32;
         assert_eq!(x, None);
         assert_eq!(y, Some(ty));
     }
@@ -924,7 +925,7 @@ mod tests {
             &Position::Right,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
+        let lx = (aw - w - bw) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, None);
 
@@ -938,7 +939,7 @@ mod tests {
             &Position::Right,
         )
         .unwrap();
-        let lx = (aw - w - bw) as u32;
+        let lx = (aw - w - bw) as i32;
         assert_eq!(x, Some(lx));
         assert_eq!(y, None);
     }
@@ -984,8 +985,8 @@ mod tests {
             &Position::Center,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(cy));
 
@@ -999,8 +1000,8 @@ mod tests {
             &Position::Center,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as u32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as u32;
+        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
+        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(cy));
     }
