@@ -38,9 +38,16 @@ pub const WINDOW_STATE_ACTION_REMOVE: WindowStateAction = 0;
 pub const WINDOW_STATE_ACTION_ADD: WindowStateAction = 1;
 
 /// Rect provides a simple way to store the width and height of an area
+#[derive(Default)]
 pub struct Rect {
     pub w: u32,
     pub h: u32,
+}
+
+impl Rect {
+    pub fn new(w: u32, h: u32) -> Self {
+        Self { w, h }
+    }
 }
 
 /// Coord provides a simple way to store x, y coordinates

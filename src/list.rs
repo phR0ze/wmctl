@@ -23,7 +23,7 @@ pub fn windows(all: bool) -> Result<()> {
     ]));
 
     for win in windows.iter() {
-        let (x, y, w, h) = win.geometry().unwrap_or((0, 0, 0, 0));
+        let (x, y, w, h) = win.visual_geometry().unwrap_or((0, 0, 0, 0));
         let (l, r, t, b) = win.borders().unwrap_or((0, 0, 0, 0));
         table.add_row(Row::new(vec![
             Cell::new(&win.id.to_string()),

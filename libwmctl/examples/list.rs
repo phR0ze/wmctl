@@ -24,11 +24,12 @@ fn main() {
     ]));
 
     for win in windows.iter() {
-        let (x, y, w, h) = win.geometry().unwrap_or((0, 0, 0, 0));
-        let (l, r, t, b) = win.borders().unwrap_or((0, 0, 0, 0));
+        let (x, y, w, h) = win.visual_geometry().unwrap();
+        let (l, r, t, b) =
+            if win.is_gtk() { win.gtk_borders().unwrap() } else { win.borders().unwrap_or((0, 0, 0, 0)) };
         table.add_row(Row::new(vec![
             Cell::new(&win.id.to_string()),
-            Cell::new(&format!("{:>2}", win.desktop().unwrap_or(-1))),
+            Cell::new(&format!("{:>2}", win.desktop().unwrap())),
             Cell::new(&win.pid().unwrap_or(-1).to_string()),
             Cell::new(&x.to_string()),
             Cell::new(&y.to_string()),

@@ -2,6 +2,7 @@
 // * https://specifications.freedesktop.org/wm-spec/latest
 // * https://github.com/psychon/x11rb/blob/master/x11rb/examples/tutorial.rs
 // * [ICCCM specification](https://x.org/releases/X11R7.6/doc/xorg-docs/specs/ICCCM/icccm.html)
+// * https://www.x.org/wiki/guide/xlib-and-xcb/
 //
 // ## Details
 // * Atoms are unique names that clients can use to communicate information to each other.
@@ -446,6 +447,7 @@ impl WinMgr {
     }
 
     /// Get window desktop
+    /// * Returns non zero based desktop number
     ///
     /// ### Arguments
     /// * `id` - id of the window to manipulate
@@ -465,17 +467,35 @@ impl WinMgr {
             .conn
             .get_property(false, id, self.atoms._NET_WM_DESKTOP, AtomEnum::CARDINAL, 0, u32::MAX)?
             .reply()?;
-        let desktop = reply
-            .value32()
-            .and_then(|mut x| x.next())
-            .ok_or(WmCtlError::PropertyNotFound("_NET_WM_DESKTOP".to_owned()))?;
+        let mut desktop = reply.value32().and_then(|mut x| x.next()).map_or(-1, |x| x as i32);
+
+        // Offset to align with how desktops are typically numbered
+        if desktop != -1 {
+            desktop += 1;
+        }
+
         debug!("win_desktop: id: {}, desktop: {}", id, desktop);
         Ok(desktop as i32)
     }
 
-    /// Get window geometry.
-    /// * Geometry is for the app window not including the window manager borders
-    /// * Total window size is calculated by using the geometry + the window borders
+    /// Get window visual geometry.
+    /// Geometry is a calculated value that represents the window's size and position including it's
+    /// frame or visually perceived frame. Be careful in calculating from this value as frame/application
+    /// borders are added and subtracted and positioning changed in different uses cases called out
+    /// below to make these values more intuitive visually. Other apps like xdotool or xwininfo use
+    /// the --frame option to include the window manager's frame in the calculation which is somewhat
+    /// akin to what is happending here only this also takes into account Client Side Decorations (CSD).
+    ///
+    /// * For Window Manager decorated windows this means this function is computing the window size
+    ///   plus window manager's border decoration as this gives an intuitively understandable visual
+    ///   window size on the screen. Positioning is also adjusted in this case to subtract the borders
+    ///   for a total visual space on screen experience.
+    /// * For Client Side Decorated (CSD) windows this means window size minus CSD borders as CSD windows
+    ///   e.g. GTK apps have a semi-transparent 23,23,15,31 border that is reported as part of the
+    ///   window's total size but isn't visible and thus is being subtracted in this function to return
+    ///   only an intuitively understandable visual window size on the screen. Positioning was also
+    ///   adjusted in this case to add the borders thus ignoring the CSD borders from a visual on screen
+    ///   perspective.
     ///
     /// ### Arguments
     /// * `id` - id of the window to manipulate
@@ -485,6 +505,47 @@ impl WinMgr {
     /// use libwmctl::prelude::*;
     /// let wm = WinMgr::connect().unwrap();
     /// let (x, y, w, h) = wm.window_geometry(1234).unwrap()
+    /// ```
+    pub(crate) fn window_visual_geometry(&self, id: u32) -> WmCtlResult<(i32, i32, u32, u32)> {
+        let (mut x, mut y, mut w, mut h) = self.window_geometry(id)?;
+
+        // Account for CSD borders
+        let mut is_gtk = false;
+        if let Ok((l, r, t, b)) = self.window_gtk_borders(id) {
+            if l > 0 || r > 0 || t > 0 || b > 0 {
+                w = w - l - r;
+                h = h - t - b;
+                x = x + l as i32;
+                y = y + t as i32;
+                is_gtk = true;
+            }
+        }
+        if !is_gtk {
+            if let Ok((l, r, t, b)) = self.window_borders(id) {
+                w = w + l + r;
+                h = h + t + b;
+                x = x - l as i32;
+                y = y - t as i32;
+            }
+        }
+
+        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
+        Ok((x, y, w, h))
+    }
+
+    /// Get window geometry as reported by the window manager without any adjustments.
+    /// * This is the window's position and size without any window manager decorations included
+    ///   which can be counter intuitive visually if you're trying to understand the window's
+    ///   position and size on the screen.
+    ///
+    /// ### Arguments
+    /// * `id` - id of the window to manipulate
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// let (x, y, w, h) = wm.window_raw_geometry(1234).unwrap()
     /// ```
     pub(crate) fn window_geometry(&self, id: u32) -> WmCtlResult<(i32, i32, u32, u32)> {
         // References
@@ -498,26 +559,32 @@ impl WinMgr {
         // coordinates that have real world meaning relative to 0, 0 of the screen.
         let g = self.conn.get_geometry(id)?.reply()?;
         let (w, h) = (g.width as u32, g.height as u32);
-        let parent = self.window_parent(id)?.id;
-        //println!("before trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, g.x, g.y, w, h);
-        let tx = self.conn.translate_coordinates(id, parent, g.x, g.y)?.reply()?;
-        let (x, y) = (tx.dst_x as i32, tx.dst_y as i32);
-        //println!("after trans: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
 
-        // Account for borders added by the window manager or semi-transparent shadows added by
-        // GNOME applications to get the true size and position of the window from a visual
-        // human understandable perspective as you would see it on the screen.
-        // let (l, r, t, b) = self.window_borders(id)?;
-        // let (x, y, w, h) = if l != 0 || r != 0 || t != 0 || b != 0 {
-        //     let (x, y, w, h) = (x - l as i32, y - t as i32, w + l + r, h + t + b);
-        //     //println!("win_borders: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
-        //     (x, y, w, h)
-        // } else {
-        //     let (l, r, t, b) = self.window_gnome_borders(id)?;
-        //     (x + l as i32, y + t as i32, w - (l + r), h - (t + b))
-        // };
+        let mut parent = self.window_parent(id)?.id;
+        let (x, y) = if parent != self.root {
+            // NOTE: Despite the XCB directions to use the window's parent for the relative translation
+            // I've found in XFWM that this doesn't report the window's position correctly unless we
+            // always use the root window for the relative base to translate from.
+            parent = self.root;
 
-        debug!("win_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
+            // NOTE: Tests show that get_geometry returns the window's (x, y) coordinates with an offset
+            // taking into account the left and top borders of the window. For example a window that
+            // visually appears to be at (0, 0) on the screen but has borders of (4, 4, 28, 4) will have
+            // an (x, y) of (4, 28) returned from get_geometry. Additionally tests show that translate
+            // adds the same left and top border values. Thus as with [wmctrl] and other projects that
+            // input the get_geometry (x, y) values into translate function as is commonly shown in many
+            // tutorials the resulting (x, y) values are being incorrectly reported as (8, 56) instead of
+            // just (4, 28) as they are incorrectly geting double the left and right borders.
+            // Thus as done in the xwininfo project simply using (0, 0) as the input parameters for
+            // translate's (x, y) will correctly add only one set of borders to the (x, y) values.
+            let tx = self.conn.translate_coordinates(id, parent, 0, 0)?.reply()?;
+            (tx.dst_x as i32, tx.dst_y as i32)
+        } else {
+            // If parent is the root window then the x, y values are already correct
+            (g.x as i32, g.y as i32)
+        };
+
+        debug!("win_raw_geometry: id: {}, x: {}, y: {}, w: {}, h: {}", id, x, y, w, h);
         Ok((x, y, w, h))
     }
 
@@ -553,6 +620,24 @@ impl WinMgr {
         Ok((l, r, t, b))
     }
 
+    /// Determine if this window is a GTK application
+    ///
+    /// ### Examples
+    /// ```ignore
+    /// use libwmctl::prelude::*;
+    /// let wm = WinMgr::connect().unwrap();
+    /// let win = window(12345);
+    /// let result = win.window_is_gtk();
+    /// ```
+    pub(crate) fn window_is_gtk(&self, id: u32) -> bool {
+        if let Ok((l, r, t, b)) = self.window_gtk_borders(id) {
+            if l > 0 || r > 0 || t | 0 | b > 0 {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Get GNOME window borders
     ///
     /// ### Arguments
@@ -566,7 +651,7 @@ impl WinMgr {
     /// let (l, r, t, b) = wm.window_gnome_borders().unwrap();
     /// ```
     #[allow(dead_code)]
-    pub(crate) fn window_gnome_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
+    pub(crate) fn window_gtk_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
         // Window managers (a.k.a server-side) decorate windows with boarders and title bars. The
         // _NET_FRAME_EXTENTS defined as: left, right, top, bottom, CARDINAL[4]/32 will retrieve
         // these values via `get_property` api call with the use of the `self.atoms._NET_FRAME_EXTENTS`
@@ -578,10 +663,6 @@ impl WinMgr {
         // app will set the _GTK_FRAME_EXTENTS property showing the space consumed by these shadows that
         // can be effectively used as the window borders rather than the window manager borders provided
         // by _NET_FRAME_EXTENTS. _GTK_FRAME_EXTENTS is defined as: left, right, top, bottom
-        //
-        // This is why `wmctl list` will show evince has geometry of 1280x1415 and borders of 0, 0, 0, 0
-        // while `xprop -id 104857608 | grep EXTENT` shows `_GTK_FRAME_EXTENTS(CARDINAL) = 23, 23, 15, 31`
-        // which would mean that the window geometry is actually 1280-23-23x1415-15-31 or 1234x1369.
         let reply = self
             .conn
             .get_property(false, id, self.atoms._GTK_FRAME_EXTENTS, AtomEnum::CARDINAL, 0, u32::MAX)?
