@@ -8,8 +8,8 @@ fn main() {
     let (px, py, pw, ph) = parent.visual_geometry().unwrap();
     let (x, y, w, h) = win.geometry().unwrap();
     let (vx, vy, vw, vh) = win.visual_geometry().unwrap();
-    let (l, r, t, b) = win.borders().unwrap();
-    let (gl, gr, gt, gb) = win.gtk_borders().unwrap();
+    let b = win.borders().unwrap();
+    let g = win.gtk_borders().unwrap();
 
     println!("Window Information");
     println!("-----------------------------------------------------------------------");
@@ -31,8 +31,8 @@ fn main() {
     println!("Desktop:      {}", win.desktop().unwrap_or(-1));
     println!("Win Geom:     x: {}, y: {}, w: {}, h: {}", x, y, w, h);
     println!("Visual Geom:  x: {}, y: {}, w: {}, h: {}", vx, vy, vw, vh);
-    println!("WM Borders:   l: {}, r: {}, t: {}, b: {}", l, r, t, b);
-    println!("GTK Borders:  l: {}, r: {}, t: {}, b: {}", gl, gr, gt, gb);
+    println!("WM Borders:   l: {}, r: {}, t: {}, b: {}", b.l, b.r, b.t, b.b);
+    println!("GTK Borders:  l: {}, r: {}, t: {}, b: {}", g.l, g.r, g.t, g.b);
     println!("State:        {:?}", win.state().unwrap_or(vec![]));
     println!("Mapped:       {}", win.mapped().unwrap());
 }

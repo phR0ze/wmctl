@@ -511,21 +511,21 @@ impl WinMgr {
 
         // Account for CSD borders
         let mut is_gtk = false;
-        if let Ok((l, r, t, b)) = self.window_gtk_borders(id) {
-            if l > 0 || r > 0 || t > 0 || b > 0 {
-                w = w - l - r;
-                h = h - t - b;
-                x = x + l as i32;
-                y = y + t as i32;
+        if let Ok(b) = self.window_gtk_borders(id) {
+            if b.l > 0 || b.r > 0 || b.t > 0 || b.b > 0 {
+                w = w - b.l - b.r;
+                h = h - b.t - b.b;
+                x = x + b.l as i32;
+                y = y + b.t as i32;
                 is_gtk = true;
             }
         }
         if !is_gtk {
-            if let Ok((l, r, t, b)) = self.window_borders(id) {
-                w = w + l + r;
-                h = h + t + b;
-                x = x - l as i32;
-                y = y - t as i32;
+            if let Ok(b) = self.window_borders(id) {
+                w = w + b.l + b.r;
+                h = h + b.t + b.b;
+                x = x - b.l as i32;
+                y = y - b.t as i32;
             }
         }
 
@@ -600,7 +600,7 @@ impl WinMgr {
     /// let win = window(12345);
     /// let (l, r, t, b) = wm.window_borders().unwrap();
     /// ```
-    pub(crate) fn window_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
+    pub(crate) fn window_borders(&self, id: u32) -> WmCtlResult<Border> {
         // Window managers decorate windows with boarders and title bars. The _NET_FRAME_EXTENTS
         // defined as: left, right, top, bottom, CARDINAL[4]/32 will retrieve these values via
         // `get_property` api call with the use of the `self.atoms._NET_FRAME_EXTENTS`
@@ -617,7 +617,7 @@ impl WinMgr {
         let b = values.next().ok_or(WmCtlError::PropertyNotFound("_NET_FRAME_EXTENTS bottom".to_owned()))?;
 
         debug!("win_borders: id: {}, l: {}, r: {}, t: {}, b: {}", id, l, r, t, b);
-        Ok((l, r, t, b))
+        Ok(Border::new(l, r, t, b))
     }
 
     /// Determine if this window is a GTK application
@@ -630,10 +630,8 @@ impl WinMgr {
     /// let result = win.window_is_gtk();
     /// ```
     pub(crate) fn window_is_gtk(&self, id: u32) -> bool {
-        if let Ok((l, r, t, b)) = self.window_gtk_borders(id) {
-            if l > 0 || r > 0 || t | 0 | b > 0 {
-                return true;
-            }
+        if let Ok(b) = self.window_gtk_borders(id) {
+            return b.any();
         }
         false
     }
@@ -651,7 +649,7 @@ impl WinMgr {
     /// let (l, r, t, b) = wm.window_gnome_borders().unwrap();
     /// ```
     #[allow(dead_code)]
-    pub(crate) fn window_gtk_borders(&self, id: u32) -> WmCtlResult<(u32, u32, u32, u32)> {
+    pub(crate) fn window_gtk_borders(&self, id: u32) -> WmCtlResult<Border> {
         // Window managers (a.k.a server-side) decorate windows with boarders and title bars. The
         // _NET_FRAME_EXTENTS defined as: left, right, top, bottom, CARDINAL[4]/32 will retrieve
         // these values via `get_property` api call with the use of the `self.atoms._NET_FRAME_EXTENTS`
@@ -670,7 +668,7 @@ impl WinMgr {
 
         // Don't abort if the property is not found as its not required
         if reply.value.is_empty() {
-            return Ok((0, 0, 0, 0));
+            return Ok(Border::default());
         }
 
         let mut values = reply.value32().ok_or(WmCtlError::PropertyNotFound("_GTK_FRAME_EXTENTS".to_owned()))?;
@@ -680,7 +678,7 @@ impl WinMgr {
         let b = values.next().ok_or(WmCtlError::PropertyNotFound("_GTK_FRAME_EXTENTS bottom".to_owned()))?;
 
         debug!("win_gnome_borders: id: {}, l: {}, r: {}, t: {}, b: {}", id, l, r, t, b);
-        Ok((l, r, t, b))
+        Ok(Border::new(l, r, t, b))
     }
 
     /// Get all properties for the given window as a sorted list

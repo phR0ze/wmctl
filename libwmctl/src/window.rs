@@ -144,7 +144,7 @@ impl Window {
     /// let win = window(12345);
     /// let (l, r, t, b) = win.borders().unwrap();
     /// ```
-    pub fn borders(&self) -> WmCtlResult<(u32, u32, u32, u32)> {
+    pub fn borders(&self) -> WmCtlResult<Border> {
         WM().read().unwrap().window_borders(self.id)
     }
 
@@ -168,7 +168,7 @@ impl Window {
     /// let win = window(12345);
     /// let (l, r, t, b) = win.gtk_borders().unwrap();
     /// ```
-    pub fn gtk_borders(&self) -> WmCtlResult<(u32, u32, u32, u32)> {
+    pub fn gtk_borders(&self) -> WmCtlResult<Border> {
         WM().read().unwrap().window_gtk_borders(self.id)
     }
 
@@ -301,13 +301,11 @@ impl Window {
         }
 
         // Get window properties
-        let (bl, br, bt, bb) = self.borders()?;
-        let (cl, cr, ct, cb) = self.gtk_borders()?;
+        let border = self.borders()?;
+        let csd_border = self.gtk_borders()?;
         let (x, y, w, h) = self.geometry()?;
         println!("debug 1: {}, {}, {}, {}", x, y, w, h);
         let size = Rect::new(w, h);
-        let border = Rect::new(bl + br, bt + bb);
-        let csd_border = Rect::new(cl + cr, ct + cb);
         let area = Rect::new(wm.work_width, wm.work_height);
 
         // Shape the window as directed
@@ -341,48 +339,64 @@ impl Window {
 /// Window should already be unmaximized before calling this function.
 ///
 /// ### Arguments
-/// * `w` - Window's current width
-/// * `h` - Window's current height
-/// * `bw` - Window's border width
-/// * `bh` - Window's border height
-/// * `aw` - Window manager's work area width
-/// * `ah` - Window manager's work area height
+/// * `size` - Window's current width and height
+/// * `border` - Window's border left, right, top, and bottom
+/// * `csd_border` - Client side border left, right, top, and bottom
+/// * `area` - Window manager's work area width and height
 /// * `pos` - Position to translate
 ///
 /// ### Returns
 /// * `(x, y)` cordinates or (None, None) for no change
 fn translate_pos(
-    size: &Rect, border: &Rect, csd_border: &Rect, area: &Rect, pos: &Position,
+    size: &Rect, border: &Border, csd_border: &Border, area: &Rect, pos: &Position,
 ) -> WmCtlResult<(Option<i32>, Option<i32>)> {
     // Pre-calculating some commonly used values for the translation
-    let csd = csd_border.w != 0 || csd_border.h != 0;
+    let csd = csd_border.any();
 
-    // x center coordinate for left of window such that the window will appear horizontally centered
+    // left x coordinate of window such that the window will appear horizontally centered
     //
+    // * if half the window + border is more than half the work area then it will be off the screen
+    //   so use 0 instead so that the window is flush with the edge and still usable.
     // * calculate half the work area minus half the window+border to get the x coordinate
     let cx = if csd {
-        (area.w as f32 / 2.0 - (size.w + border.w) as f32 / 2.0) as i32
+        (area.w as f32 / 2.0 - (size.w + csd_border.w()) as f32 / 2.0) as i32
     } else {
-        (area.w as f32 / 2.0 - (size.w + border.w) as f32 / 2.0) as i32
+        if (size.w + border.w()) / 2 >= area.w / 2 {
+            0
+        } else {
+            (area.w as f32 / 2.0 - (size.w + border.w()) as f32 / 2.0) as i32
+        }
     };
 
-    // y center coordinate for top of window such that the window will appear vertically centered
+    // top y coordinate of window such that the window will appear vertically centered
     //
     // * if half the window+border is more than half the work area then it will be off the screen
     //   so use 0 instead so that the window is flush with the edge and still usable.
     // * else calculate half the work area minus half the window+border to get the y coordinate
-    let cy = if (area.h + border.h) / 2 >= area.h / 2 {
-        0
+    let cy = if csd {
+        (area.h as f32 / 2.0 - (size.h + csd_border.h()) as f32 / 2.0) as i32
     } else {
-        (area.h as f32 / 2.0 - (size.h + border.h) as f32 / 2.0) as i32
+        if (size.h + border.h()) / 2 >= area.h / 2 {
+            0
+        } else {
+            (area.h as f32 / 2.0 - (size.h + border.h()) as f32 / 2.0) as i32
+        }
     };
 
     // left x coordinate for the window such that the window will appear all the way to the right
     //
-    // * if the window+border is more than the work area then it will be off the screen
+    // * if the window + border is more than the work area then it will be off the screen
     //   so use 0 instead so that the window is flush with the edge and still usable.
     // * else calculate the window+border minus the work area to get the x coordinate
-    let lx = if size.w + border.w >= area.w { 0 } else { (area.w - size.w - border.w) as i32 };
+    let lx = if csd {
+        area.w as i32 - size.w as i32
+    } else {
+        if size.w + border.w() >= area.w {
+            0
+        } else {
+            area.w as i32 - size.w as i32 - border.w() as i32
+        }
+    };
 
     // top y coordinate for the window such that the window will appear all the way to the top
     //
@@ -393,7 +407,7 @@ fn translate_pos(
     // * CSD windows
     //   * in order to get the visual appearance of a window flush with the top edge we need
     //   * we need subtract the CSD border amount which will place the window off screen.
-    let ty = if csd { 0 - csd_border.h as i32 } else { 0 };
+    let ty = if csd { 0 - csd_border.t as i32 } else { 0 };
 
     Ok(match pos {
         Position::Center => (Some(cx), Some(cy)),
@@ -418,22 +432,22 @@ fn translate_pos(
 ///
 /// ### Arguments
 /// * `size` - Window's current (width, height)
-/// * `border` - Window Manager decorations as summed borders
-/// * `csd_border` - Client side decorations (e.g. GTK) as summed borders
+/// * `border` - Window Manager's borders left, right, top, bottom
+/// * `csd_border` - Client side decorations left, right, top, bottom
 /// * `area` - Window manager's work area (width, height)
 /// * `shape` - Desired shape to make the window
 ///
 /// ### Returns
 /// * `(g, w, h)` size, or (None, 0, 0) for maximize, or (None, None, None) for no change
 fn translate_shape(
-    size: &Rect, border: &Rect, csd_border: &Rect, area: &Rect, shape: &Shape,
+    size: &Rect, border: &Border, csd_border: &Border, area: &Rect, shape: &Shape,
 ) -> WmCtlResult<(Option<u32>, Option<u32>, Option<u32>)> {
     Ok(match shape {
         Shape::Max => (None, Some(0), Some(0)),
         Shape::UnMax => (None, None, None),
         _ => {
             // Determine if the window has CSD borders
-            let csd = csd_border.w != 0 || csd_border.h != 0;
+            let csd = csd_border.any();
 
             // Pre-calculations
             // * return values from this function should NOT include the border sizes for regular
@@ -442,23 +456,23 @@ fn translate_shape(
             //   as the Window Manager doesn't know about the client side decorations.
 
             // full width = total width + border || total width - border
-            let fw = if csd { area.w + csd_border.w } else { area.w - border.w };
+            let fw = if csd { area.w + csd_border.w() } else { area.w - border.w() };
 
             // full height = total height + CSD border || total height - border
-            let fh = if csd { area.h + csd_border.h } else { area.h - border.h };
+            let fh = if csd { area.h + csd_border.h() } else { area.h - border.h() };
 
             // half width = total width + CSD border || total width - border
             let hw = if csd {
-                (area.w as f32 / 2.0) as u32 + csd_border.w
+                (area.w as f32 / 2.0) as u32 + csd_border.w()
             } else {
-                (area.w as f32 / 2.0) as u32 - border.w
+                (area.w as f32 / 2.0) as u32 - border.w()
             };
 
             // half height = total height + CSD border || total height - border
             let hh = if csd {
-                (area.h as f32 / 2.0) as u32 + csd_border.h
+                (area.h as f32 / 2.0) as u32 + csd_border.h()
             } else {
-                (area.h as f32 / 2.0) as u32 - border.h
+                (area.h as f32 / 2.0) as u32 - border.h()
             };
 
             let (g, w, h) = match shape {
@@ -467,17 +481,17 @@ fn translate_shape(
                 // * Caculate without borders for regular windows
                 Shape::Grow => {
                     let mut w = if csd {
-                        ((size.w + csd_border.w) as f32 * 1.01) as u32
+                        ((size.w + csd_border.w()) as f32 * 1.01) as u32
                     } else {
-                        ((size.w - border.w) as f32 * 1.01) as u32
+                        ((size.w - border.w()) as f32 * 1.01) as u32
                     };
                     if w >= fw {
                         w = fw
                     }
                     let mut h = if csd {
-                        ((size.h + csd_border.h) as f32 * 1.01) as u32
+                        ((size.h + csd_border.h()) as f32 * 1.01) as u32
                     } else {
-                        ((size.h - border.h) as f32 * 1.01) as u32
+                        ((size.h - border.h()) as f32 * 1.01) as u32
                     };
                     if h >= fh {
                         h = fh
@@ -523,17 +537,17 @@ fn translate_shape(
                 // * Caculate without borders for regular windows
                 Shape::Shrink => {
                     let mut w = if csd {
-                        (size.w + csd_border.w) as f32 * 0.99
+                        (size.w + csd_border.w()) as f32 * 0.99
                     } else {
-                        (size.w - border.w) as f32 * 0.99
+                        (size.w - border.w()) as f32 * 0.99
                     };
                     if w < 100.0 {
                         w = 100.0
                     }
                     let mut h = if csd {
-                        (size.h + csd_border.h) as f32 * 0.99
+                        (size.h + csd_border.h()) as f32 * 0.99
                     } else {
-                        (size.h - border.h) as f32 * 0.99
+                        (size.h - border.h()) as f32 * 0.99
                     };
                     if h < 100.0 {
                         h = 100.0
@@ -548,7 +562,7 @@ fn translate_shape(
                 // * Don't include borders for regular windows
                 Shape::Static(w, h) => {
                     if csd {
-                        (None, Some(*w + csd_border.w), Some(*h + csd_border.h))
+                        (None, Some(*w + csd_border.w()), Some(*h + csd_border.h()))
                     } else {
                         (None, Some(*w), Some(*h))
                     }
@@ -570,8 +584,8 @@ mod tests {
     fn test_translate_shape_halfw() {
         // No borders
         let size = Rect::default();
-        let borders = Rect::default();
-        let csd = Rect::default();
+        let borders = Border::default();
+        let csd = Border::default();
         let area = Rect { w: 2560, h: 1415 };
         let (g, _w, _h) = translate_shape(&size, &borders, &csd, &area, &Shape::Halfw).unwrap();
         let hw = (area.w as f32 / 2.0) as u32;
@@ -581,21 +595,21 @@ mod tests {
         assert_eq!(_h, Some(fh));
 
         // With window manager borders
-        let borders = Rect::new(10, 20);
+        let borders = Border::new(5, 5, 10, 10);
         let area = Rect { w: 2560, h: 1415 };
         let (g, _w, _h) = translate_shape(&size, &borders, &csd, &area, &Shape::Halfw).unwrap();
-        let hw = (area.w as f32 / 2.0) as u32 - borders.w;
-        let fh = (area.h) as u32 - borders.h;
+        let hw = (area.w as f32 / 2.0) as u32 - borders.w();
+        let fh = (area.h) as u32 - borders.h();
         assert_eq!(g, None);
         assert_eq!(_w, Some(hw));
         assert_eq!(_h, Some(fh));
 
         // With csd borders
-        let csd = Rect::new(10, 20);
+        let csd = Border::new(5, 5, 10, 10);
         let area = Rect { w: 2560, h: 1415 };
         let (g, _w, _h) = translate_shape(&size, &borders, &csd, &area, &Shape::Halfw).unwrap();
-        let hw = (area.w as f32 / 2.0) as u32 + csd.w;
-        let fh = (area.h) as u32 + csd.h;
+        let hw = (area.w as f32 / 2.0) as u32 + csd.w();
+        let fh = (area.h) as u32 + csd.h();
         assert_eq!(g, None);
         assert_eq!(_w, Some(hw));
         assert_eq!(_h, Some(fh));
@@ -607,8 +621,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomCenter,
         )
@@ -622,8 +636,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomCenter,
         )
@@ -640,8 +654,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopCenter,
         )
@@ -654,8 +668,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopCenter,
         )
@@ -671,8 +685,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::RightCenter,
         )
@@ -686,8 +700,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::RightCenter,
         )
@@ -704,8 +718,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::LeftCenter,
         )
@@ -718,8 +732,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::LeftCenter,
         )
@@ -735,8 +749,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomRight,
         )
@@ -750,8 +764,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomRight,
         )
@@ -768,8 +782,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomLeft,
         )
@@ -782,8 +796,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomLeft,
         )
@@ -799,8 +813,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopRight,
         )
@@ -813,8 +827,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopRight,
         )
@@ -830,8 +844,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopLeft,
         )
@@ -843,8 +857,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopLeft,
         )
@@ -859,8 +873,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Bottom,
         )
@@ -873,8 +887,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Bottom,
         )
@@ -890,8 +904,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Top,
         )
@@ -903,8 +917,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Top,
         )
@@ -919,8 +933,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Right,
         )
@@ -933,8 +947,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Right,
         )
@@ -950,8 +964,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Left,
         )
@@ -963,8 +977,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Left,
         )
@@ -979,8 +993,8 @@ mod tests {
         let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Center,
         )
@@ -994,8 +1008,8 @@ mod tests {
         let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Rect::new(bw as u32, bh as u32),
-            &Rect::new(cw as u32, ch as u32),
+            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
+            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
             &Rect::new(aw as u32, ah as u32),
             &Position::Center,
         )

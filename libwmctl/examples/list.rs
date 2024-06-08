@@ -25,8 +25,7 @@ fn main() {
 
     for win in windows.iter() {
         let (x, y, w, h) = win.visual_geometry().unwrap();
-        let (l, r, t, b) =
-            if win.is_gtk() { win.gtk_borders().unwrap() } else { win.borders().unwrap_or((0, 0, 0, 0)) };
+        let b = if win.is_gtk() { win.gtk_borders().unwrap() } else { win.borders().unwrap() };
         table.add_row(Row::new(vec![
             Cell::new(&win.id.to_string()),
             Cell::new(&format!("{:>2}", win.desktop().unwrap())),
@@ -35,7 +34,7 @@ fn main() {
             Cell::new(&y.to_string()),
             Cell::new(&w.to_string()),
             Cell::new(&h.to_string()),
-            Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
+            Cell::new(&format!("L{},R{},T{},B{}", b.l, b.r, b.t, b.b)),
             Cell::new(&format!("{}", win.parent().unwrap().id)),
             Cell::new(&win.kind().unwrap_or(Kind::Invalid).to_string()),
             Cell::new(&format!("{:?}", win.state().unwrap_or(vec![]))),
