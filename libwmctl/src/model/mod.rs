@@ -4,7 +4,6 @@
 //! ```
 //! use libwmctl::prelude::*;
 //! ```
-mod class;
 mod gravity;
 mod info;
 mod kind;
@@ -15,7 +14,6 @@ mod shape;
 mod state;
 
 // Export contents of modules
-pub use class::*;
 pub use gravity::*;
 pub use info::*;
 pub use kind::*;

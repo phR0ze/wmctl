@@ -25,19 +25,18 @@
 //! ```bash
 //! wmctl place small bottom-left
 //! ```
-use std::convert::TryFrom;
 use std::env;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use gory::*;
-use libwmctl::prelude::*;
 use tracing::Level;
 use tracing_subscriber;
 use witcher::prelude::*;
 
-mod get;
 mod info;
 mod list;
+mod place;
+mod utils;
 
 // Configure logging
 #[doc(hidden)]
@@ -88,14 +87,21 @@ fn init() -> Result<()> {
         .subcommand(SubCommand::with_name("version").alias("v").alias("ver").about("Print version information"))
 
         // Info
-        .subcommand(SubCommand::with_name("info").about("List out X11 information")
-            .long_about(r"List out X11 information i.e. resolution, workspace size, windows
+        .subcommand(SubCommand::with_name("info").about("Print X11 component information")
+            .long_about(r"Print out X11 component information e.g. Window Manager, Window or other
 
 Examples:
 
-# List out X11 information
+# Print out the active window information
 wmctl info
-"))
+
+# Print out information for the first window by class
+wmctl -c firefox info
+
+# Print out Window Manager information
+wmctl info winmgr
+").subcommand(SubCommand::with_name("winmgr").about("Print out information for the Window Manager")
+    .arg(Arg::with_name("all").long("all").short("a").takes_value(false).help("Show supported Window Manager functions"))))
 
         // List out all the windows
         .subcommand(SubCommand::with_name("list").about("List out windows")
@@ -201,15 +207,6 @@ wmctl static 1276 757 0 0
         _ => None,
     });
 
-    // Determine the target window if given
-    let id = if matches.is_present("window") {
-        matches.value_of("window").and_then(|x| x.parse::<u32>().ok())
-    } else if matches.is_present("class") {
-        matches.value_of("class").and_then(|x| libwmctl::first_by_class(x).and_then(|x| Some(x.id)))
-    } else {
-        None
-    };
-
     // Version
     if let Some(ref _matches) = matches.subcommand_matches("version") {
         println!("{}: {}", APP_NAME.cyan(), APP_DESCRIPTION.cyan());
@@ -219,39 +216,20 @@ wmctl static 1276 757 0 0
         println!("{:<w$} {}", "Git Commit:", APP_GIT_COMMIT, w = 18);
 
     // info
-    } else if let Some(_) = matches.subcommand_matches("info") {
-        info::list().unwrap();
+    } else if matches.is_present("info") {
+        info::run(&matches);
 
     // list
-    } else if let Some(matches) = matches.subcommand_matches("list") {
-        list::windows(matches.is_present("all"))?;
+    } else if matches.is_present("list") {
+        list::run(&matches)?;
 
-    // move
-    } else if let Some(ref matches) = matches.subcommand_matches("move") {
-        let pos = Position::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        window(id).pos(pos).place().pass()?;
     // place
-    } else if let Some(ref matches) = matches.subcommand_matches("place") {
-        let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
-        let pos = Position::try_from(matches.value_of("POSITION").unwrap()).pass()?;
-        window(id).shape(shape).pos(pos).place().pass()?;
-
-    // static
-    } else if let Some(ref matches) = matches.subcommand_matches("static") {
-        let w = matches.value_of("WIDTH").unwrap().parse::<u32>().pass()?;
-        let h = matches.value_of("HEIGHT").unwrap().parse::<u32>().pass()?;
-        let mut win = window(id).shape(Shape::Static(w, h));
-        if matches.value_of("X").is_some() && matches.value_of("Y").is_some() {
-            let x = matches.value_of("X").unwrap().parse::<u32>().pass()?;
-            let y = matches.value_of("Y").unwrap().parse::<u32>().pass()?;
-            win = win.pos(Position::Static(x, y));
-        }
-        win.place().pass()?;
-
-    // shape
-    } else if let Some(ref matches) = matches.subcommand_matches("shape") {
-        let shape = Shape::try_from(matches.value_of("SHAPE").unwrap()).pass()?;
-        window(id).shape(shape).place().pass()?;
+    } else if matches.is_present("move")
+        || matches.is_present("place")
+        || matches.is_present("shape")
+        || matches.is_present("static")
+    {
+        place::run(&matches)?;
     }
 
     Ok(())

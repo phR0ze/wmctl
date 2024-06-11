@@ -12,7 +12,7 @@ pub enum WmCtlError {
     InvalidWinGravity(u32),
     InvalidWinPosition(String),
     InvalidWinShape(String),
-    InvalidWinClass(u32),
+    InvalidWinClass(String),
     InvalidWinMap(u32),
     InvalidWinState(u32),
     InvalidWinType(u32),

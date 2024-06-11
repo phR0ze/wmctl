@@ -1,11 +1,23 @@
+use clap::ArgMatches;
 use libwmctl::prelude::*;
 use prettytable::{format, Cell, Row, Table};
 use witcher::prelude::*;
 
+/// Run the subcommand
+///
+/// ### Arguments
+/// * `global` - the ArgMatches object for the global arguments
+pub fn run(global: &ArgMatches) -> Result<()> {
+    let matches = global.subcommand_matches("list").unwrap();
+    windows(matches.is_present("all"))
+}
+
+// List all windows
 pub fn windows(all: bool) -> Result<()> {
-    let windows = libwmctl::windows(all).pass()?;
+    let windows = libwmctl::windows(all).unwrap();
     let mut table = Table::new();
     table.set_format(format::FormatBuilder::new().padding(1, 1).build());
+
     table.set_titles(Row::new(vec![
         Cell::new("ID"),
         Cell::new("DSK"),
@@ -23,17 +35,17 @@ pub fn windows(all: bool) -> Result<()> {
     ]));
 
     for win in windows.iter() {
-        let (x, y, w, h) = win.visual_geometry().unwrap_or((0, 0, 0, 0));
-        let (l, r, t, b) = win.borders().unwrap_or((0, 0, 0, 0));
+        let (x, y, w, h) = win.visual_geometry().unwrap();
+        let b = if win.is_gtk() { win.gtk_borders() } else { win.borders() };
         table.add_row(Row::new(vec![
             Cell::new(&win.id.to_string()),
-            Cell::new(&format!("{:>2}", win.desktop().unwrap_or(-1))),
+            Cell::new(&format!("{:>2}", win.desktop().unwrap())),
             Cell::new(&win.pid().unwrap_or(-1).to_string()),
             Cell::new(&x.to_string()),
             Cell::new(&y.to_string()),
             Cell::new(&w.to_string()),
             Cell::new(&h.to_string()),
-            Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
+            Cell::new(&format!("L{},R{},T{},B{}", b.l, b.r, b.t, b.b)),
             Cell::new(&format!("{}", win.parent().unwrap().id)),
             Cell::new(&win.kind().unwrap_or(Kind::Invalid).to_string()),
             Cell::new(&format!("{:?}", win.state().unwrap_or(vec![]))),

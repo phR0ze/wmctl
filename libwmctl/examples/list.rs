@@ -25,7 +25,7 @@ fn main() {
 
     for win in windows.iter() {
         let (x, y, w, h) = win.visual_geometry().unwrap();
-        let b = if win.is_gtk() { win.gtk_borders().unwrap() } else { win.borders().unwrap() };
+        let b = if win.is_gtk() { win.gtk_borders() } else { win.borders() };
         table.add_row(Row::new(vec![
             Cell::new(&win.id.to_string()),
             Cell::new(&format!("{:>2}", win.desktop().unwrap())),

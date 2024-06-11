@@ -8,8 +8,8 @@ fn main() {
     let (px, py, pw, ph) = parent.visual_geometry().unwrap();
     let (x, y, w, h) = win.geometry().unwrap();
     let (vx, vy, vw, vh) = win.visual_geometry().unwrap();
-    let b = win.borders().unwrap();
-    let g = win.gtk_borders().unwrap();
+    let b = win.borders();
+    let g = win.gtk_borders();
 
     println!("Window Information");
     println!("-----------------------------------------------------------------------");

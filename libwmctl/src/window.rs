@@ -144,10 +144,10 @@ impl Window {
     /// ```ignore
     /// use libwmctl::prelude::*;
     /// let win = window(12345);
-    /// let (l, r, t, b) = win.borders().unwrap();
+    /// let (l, r, t, b) = win.borders();
     /// ```
-    pub fn borders(&self) -> WmCtlResult<Border> {
-        WM().read().unwrap().window_borders(self.id)
+    pub fn borders(&self) -> Border {
+        WM().read().unwrap().window_borders(self.id).unwrap_or(Border::default())
     }
 
     /// Determine if this window is a GTK application
@@ -168,10 +168,10 @@ impl Window {
     /// ```ignore
     /// use libwmctl::prelude::*;
     /// let win = window(12345);
-    /// let (l, r, t, b) = win.gtk_borders().unwrap();
+    /// let (l, r, t, b) = win.gtk_borders();
     /// ```
-    pub fn gtk_borders(&self) -> WmCtlResult<Border> {
-        WM().read().unwrap().window_gtk_borders(self.id)
+    pub fn gtk_borders(&self) -> Border {
+        WM().read().unwrap().window_gtk_borders(self.id).unwrap_or(Border::default())
     }
 
     /// Get window mapped state
@@ -303,8 +303,8 @@ impl Window {
         }
 
         // Get window properties
-        let border = self.borders()?;
-        let csd_border = self.gtk_borders()?;
+        let border = self.borders();
+        let csd_border = self.gtk_borders();
         let (_, _, w, h) = self.geometry()?;
         let size = Rect::new(w, h);
         let area = Rect::new(wm.work_width, wm.work_height);

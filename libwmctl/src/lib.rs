@@ -32,6 +32,7 @@ use winmgr::WinMgr;
 /// ```
 pub mod prelude {
     pub use crate::*;
+    pub use model::Info;
 }
 
 /// Singleton providing a single instance of WmCtl shared across the application. Using RwLock here
