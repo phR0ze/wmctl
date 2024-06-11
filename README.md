@@ -5,7 +5,7 @@
 
 ***Rust X11 automation***
 
-`wmctl` implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
+`wmctl` partially implements the [Extended Window Manager Hints (EWMH) specification](https://specifications.freedesktop.org/wm-spec/latest/)
 as a way to work along side EWMH compatible window managers as a companion. `wmctl` provides the 
 ability to precisely define how windows should be shaped and placed and can fill in gaps for window 
 managers lacking some shaping or placement features. Mapping wmctl commands to user defined hot key 
@@ -30,8 +30,7 @@ strictly the responsiblity of the user and not the developer/creator of ***wmctl
 * [Changelog](#changelog)
 
 ## Usage
-***rustc >= 1.30*** is required due to the 
-[tracing\_subscriber](https://docs.rs/tracing-subscriber/0.2.15/tracing_subscriber) requirements
+***rustc >= 1.56*** is the minimum supported Rust version for this project
 
 `$ wmctl -h` for cli help
 ![help image](docs/images/help.png)
@@ -79,7 +78,7 @@ any additional terms or conditions.
 
 ## Changelog
 * 5/30/2024
-  * Fix for GTK Client-side window decorations are not being calculated correctly
+  * Fix for GTK Client-side window decorations not being calculated correctly
 * 12/18/2021
   * Add Arch Linux packaging
   * Added public documentation

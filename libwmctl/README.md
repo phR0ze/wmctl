@@ -29,99 +29,79 @@ This minimum rustc requirement is driven by the
 [tracing\_subscriber](https://docs.rs/tracing-subscriber/0.2.15/tracing_subscriber) requirements
 
 ### Shape window
-Shape the active window using the pre-defined `WinShape::Small` shape which is a quarter of the 
+Shape the active window using the pre-defined `Shape::Small` shape which is a quarter of the 
 screen.
 
 ```rust
 use libwmctl::prelude::*;
 
 fn main() {
-    WinOpt::new(None).shape(WinShape::Max).place().unwrap();
+    active().shape(Shape::Small).place().unwrap();
 }
 ```
 
 ### Move window
 Move the active window to the bottom left corner of the screen using the pre-defined 
-`WinPosition::BottomLeft` position.
+`Position::BottomLeft` position.
 
 ```rust
 use libwmctl::prelude::*;
 
 fn main() {
-    WinOpt::new(None).pos(WinPosition::BottomLeft).place().unwrap();
+    active().pos(Position::BottomLeft).place().unwrap();
 }
 ```
 
 ### Place window
 Combine the shape and move into a single command by placing the window. First the window is shaped 
-using the pre-defined `WinShap::Small` shape then it is moved to the bottom left using the 
-pre-defined `WinPosition:BottomLeft` position in a single operation.
+using the pre-defined `Shap::Small` shape then it is moved to the bottom left using the 
+pre-defined `Position:BottomLeft` position in a single operation.
 
 ```rust
 use libwmctl::prelude::*;
 
 fn main() {
-    WinOpt::new(None).shape(WinShape::Small).pos(WinPosition::BottomLeft).place().unwrap();
+    active().shape(Shape::Small).pos(Position::BottomLeft).place().unwrap();
 }
 ```
 
 ### Window Manager info
 ```rust
 use libwmctl::prelude::*;
+use prettytable::{format, Cell, Row, Table};
 
 fn main() {
-    let wmctl = WmCtl::connect().unwrap();
-    let (_, wm_name) = wmctl.winmgr().unwrap();
-    let win = wmctl.active_win().unwrap();
-    println!("X11 Information");
+    let wm = info().unwrap();
+    let win = active();
+
+    println!("Window Manager Information");
     println!("-----------------------------------------------------------------------");
-    println!("Window Manager:    {}", wm_name);
-    println!("Composite Manager: {}", wmctl.composite_manager().unwrap());
-    println!("Root Window:       {}", wmctl.root());
-    println!("Work area:         {}x{}", wmctl.work_width(), wmctl.work_height());
-    println!("Screen Size:       {}x{}", wmctl.width(), wmctl.height());
-    println!("Desktops:          {}", wmctl.desktops().unwrap());
+    println!("Window Manager: {}", wm.name);
+    println!("Compositing:    {}", wm.compositing);
+    println!("Root Window:    {}", wm.root_win_id);
+    println!("Work area:      {}x{}", wm.work_area.0, wm.work_area.1);
+    println!("Screen Size:    {}x{}", wm.screen_size.0, wm.screen_size.1);
+    println!("Desktops:       {}", wm.desktops);
+    println!("Active Window:  {}", win.id);
     println!();
 
-    println!("Active Window");
+    println!("Window Manager Supported Functions:");
     let mut table = Table::new();
-    table.add_row(Row::new(vec![
-        Cell::new("ID"),
-        Cell::new("DSK"),
-        Cell::new("PID"),
-        Cell::new("X"),
-        Cell::new("Y"),
-        Cell::new("W"),
-        Cell::new("H"),
-        Cell::new("BORDERS"),
-        Cell::new("TYPE"),
-        Cell::new("STATE"),
-        Cell::new("CLASS"),
-        Cell::new("NAME"),
-    ]));
+    table.set_format(
+        format::FormatBuilder::new()
+            .separator(format::LinePosition::Top, format::LineSeparator::new('-', '+', '+', '+'))
+            .separator(format::LinePosition::Title, format::LineSeparator::new('=', '+', '+', '+'))
+            .padding(1, 1)
+            .build(),
+    );
+    table.set_titles(Row::new(vec![Cell::new("NAME"), Cell::new("ID")]));
 
-    let pid = wmctl.win_pid(win).unwrap_or(-1);
-    let desktop = wmctl.win_desktop(win).unwrap_or(-1);
-    let typ = wmctl.win_type(win).unwrap_or(WinType::Invalid);
-    let states = wmctl.win_state(win).unwrap_or(vec![WinState::Invalid]);
-    let (x, y, w, h) = wmctl.win_geometry(win).unwrap_or((0, 0, 0, 0));
-    let (l, r, t, b) = wmctl.win_borders(win).unwrap_or((0, 0, 0, 0));
-    let class = wmctl.win_class(win).unwrap_or("".to_owned());
-    let name = wmctl.win_name(win).unwrap_or("".to_owned());
-    table.add_row(Row::new(vec![
-        Cell::new(&win.to_string()),
-        Cell::new(&format!("{:>2}", desktop)),
-        Cell::new(&pid.to_string()),
-        Cell::new(&x.to_string()),
-        Cell::new(&y.to_string()),
-        Cell::new(&w.to_string()),
-        Cell::new(&h.to_string()),
-        Cell::new(&format!("L{},R{},T{},B{}", l, r, t, b)),
-        Cell::new(&typ.to_string()),
-        Cell::new(&format!("{:?}", states)),
-        Cell::new(&class),
-        Cell::new(&name),
-    ]));
+    // Sort atoms by name
+    let mut atoms = wm.supported.iter().collect::<Vec<_>>();
+    atoms.sort_by(|a, b| a.1.cmp(b.1));
+    for atom in atoms.iter() {
+        table.add_row(Row::new(vec![Cell::new(&atom.1), Cell::new(&atom.0.to_string())]));
+    }
     table.printstd();
 }
 ```

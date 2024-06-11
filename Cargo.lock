@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "libwmctl"
-version = "0.0.49"
+version = "0.0.50"
 dependencies = [
  "prettytable",
  "tracing",
@@ -891,7 +891,7 @@ dependencies = [
 
 [[package]]
 name = "wmctl"
-version = "0.0.49"
+version = "0.0.50"
 dependencies = [
  "chrono",
  "clap",
