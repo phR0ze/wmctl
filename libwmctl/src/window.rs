@@ -1,3 +1,5 @@
+use tracing::debug;
+
 use crate::{model::*, WmCtlResult, WM};
 
 /// Window provides a higer level interfacefor manipulating windows.
@@ -303,8 +305,7 @@ impl Window {
         // Get window properties
         let border = self.borders()?;
         let csd_border = self.gtk_borders()?;
-        let (x, y, w, h) = self.geometry()?;
-        println!("debug 1: {}, {}, {}, {}", x, y, w, h);
+        let (_, _, w, h) = self.geometry()?;
         let size = Rect::new(w, h);
         let area = Rect::new(wm.work_width, wm.work_height);
 
@@ -330,7 +331,7 @@ impl Window {
         };
 
         // Execute if reason to
-        println!("debug 2: {:?}, {:?}, {}, {}", x, y, w, h);
+        debug!("place: {:?}, {:?}, {}, {}", x, y, w, h);
         wm.move_resize_window(self.id, gravity, x, y, sw, sh)
     }
 }
@@ -353,77 +354,68 @@ fn translate_pos(
     // Pre-calculating some commonly used values for the translation
     let csd = csd_border.any();
 
-    // left x coordinate of window such that the window will appear horizontally centered
-    //
-    // * if half the window + border is more than half the work area then it will be off the screen
-    //   so use 0 instead so that the window is flush with the edge and still usable.
-    // * calculate half the work area minus half the window+border to get the x coordinate
+    // Centering algorithm: wether the window has CSD borders part of the app or are added on
+    // after the fact by the window manager the algorithm at its root is the same. We need to
+    // ensure the borders are subtracted and calculated separately as they are frequently not
+    // the same size.
+
+    // left x coordinate of window such that the window will appear horizontally centered.
     let cx = if csd {
-        (area.w as f32 / 2.0 - (size.w + csd_border.w()) as f32 / 2.0) as i32
+        let offset = csd_border.w() as f32 / 2.0;
+        ((area.w as f32 - size.w as f32 - csd_border.w() as f32) / 2.0 + offset) as i32
     } else {
-        if (size.w + border.w()) / 2 >= area.w / 2 {
-            0
-        } else {
-            (area.w as f32 / 2.0 - (size.w + border.w()) as f32 / 2.0) as i32
-        }
+        ((area.w as f32 - (size.w as f32 + border.w() as f32)) / 2.0) as i32
     };
 
     // top y coordinate of window such that the window will appear vertically centered
-    //
-    // * if half the window+border is more than half the work area then it will be off the screen
-    //   so use 0 instead so that the window is flush with the edge and still usable.
-    // * else calculate half the work area minus half the window+border to get the y coordinate
     let cy = if csd {
-        (area.h as f32 / 2.0 - (size.h + csd_border.h()) as f32 / 2.0) as i32
+        let offset = csd_border.h() as f32 / 2.0;
+        ((area.h as f32 - size.h as f32 - csd_border.h() as f32) / 2.0 + offset) as i32
     } else {
-        if (size.h + border.h()) / 2 >= area.h / 2 {
-            0
-        } else {
-            (area.h as f32 / 2.0 - (size.h + border.h()) as f32 / 2.0) as i32
-        }
+        ((area.h as f32 - (size.h as f32 + border.h() as f32)) / 2.0) as i32
     };
 
-    // left x coordinate for the window such that the window will appear all the way to the right
-    //
-    // * if the window + border is more than the work area then it will be off the screen
-    //   so use 0 instead so that the window is flush with the edge and still usable.
-    // * else calculate the window+border minus the work area to get the x coordinate
-    let lx = if csd {
-        area.w as i32 - size.w as i32
+    // left x coordinate for the window such that the window will appear on the right
+    let lxr = if csd {
+        area.w as i32 - size.w as i32 + csd_border.r as i32
     } else {
-        if size.w + border.w() >= area.w {
-            0
-        } else {
-            area.w as i32 - size.w as i32 - border.w() as i32
-        }
+        area.w as i32 - size.w as i32 - border.w() as i32
     };
+
+    // left x coordinate for the window such that the window will appear on the left
+    let lxl = if csd { 0 - csd_border.l as i32 } else { 0 };
 
     // top y coordinate for the window such that the window will appear all the way to the top
-    //
-    // * Window Manager decorated windows
-    //   * if the window+border is more than the work area then it will be off the screen
-    //     so use 0 instead so that the window is flush with the top edge and still usable.
-    //   * else calculate the window+border minus the work area to get the y coordinate
-    // * CSD windows
-    //   * in order to get the visual appearance of a window flush with the top edge we need
-    //   * we need subtract the CSD border amount which will place the window off screen.
     let ty = if csd { 0 - csd_border.t as i32 } else { 0 };
+
+    // bottom y coordinate for the window such that the window will appear at the bottom
+    let by = if csd {
+        area.h as i32 - size.h as i32 + csd_border.b as i32
+    } else {
+        area.h as i32 - size.h as i32 - border.h() as i32
+    };
 
     Ok(match pos {
         Position::Center => (Some(cx), Some(cy)),
-        Position::Left => (Some(0), None),
-        Position::Right => (Some(lx), None),
-        Position::Top => (None, Some(0)),
-        Position::Bottom => (None, Some(ty)),
-        Position::TopLeft => (Some(0), Some(0)),
-        Position::TopRight => (Some(lx), Some(0)),
-        Position::BottomLeft => (Some(0), Some(ty)),
-        Position::BottomRight => (Some(lx), Some(ty)),
-        Position::LeftCenter => (Some(0), Some(cy)),
-        Position::RightCenter => (Some(lx), Some(cy)),
-        Position::TopCenter => (Some(cx), Some(0)),
-        Position::BottomCenter => (Some(cx), Some(ty)),
-        Position::Static(x, y) => (Some(*x), Some(*y)),
+        Position::Left => (Some(lxl), None),
+        Position::Right => (Some(lxr), None),
+        Position::Top => (None, Some(ty)),
+        Position::Bottom => (None, Some(by)),
+        Position::TopLeft => (Some(lxl), Some(ty)),
+        Position::TopRight => (Some(lxr), Some(ty)),
+        Position::BottomLeft => (Some(lxl), Some(by)),
+        Position::BottomRight => (Some(lxr), Some(by)),
+        Position::LeftCenter => (Some(lxl), Some(cy)),
+        Position::RightCenter => (Some(lxr), Some(cy)),
+        Position::TopCenter => (Some(cx), Some(ty)),
+        Position::BottomCenter => (Some(cx), Some(by)),
+        Position::Static(x, y) => {
+            if csd {
+                (Some(*x - csd_border.l as i32), Some(*y - csd_border.t as i32))
+            } else {
+                (Some(*x), Some(*y))
+            }
+        },
     })
 }
 
@@ -618,405 +610,688 @@ mod tests {
     #[test]
     fn test_translate_pos_bottomcenter() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
-        let ty = (ah - h - bh) as i32;
+        let cx = ((aw as f32 - w as f32) / 2.0) as i32;
+        let by = (ah - h) as i32;
         assert_eq!(x, Some(cx));
-        assert_eq!(y, Some(ty));
+        assert_eq!(y, Some(by));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
-        let ty = (ah - h - bh) as i32;
+        let cx = ((aw as f32 - (w as f32 + b.w() as f32)) / 2.0) as i32;
+        let by = (ah as f32 - h as f32 - b.h() as f32) as i32;
         assert_eq!(x, Some(cx));
-        assert_eq!(y, Some(ty));
+        assert_eq!(y, Some(by));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::BottomCenter,
+        )
+        .unwrap();
+        let offset = c.w() as f32 / 2.0;
+        let cx = ((aw as f32 - w as f32 - c.w() as f32) / 2.0 + offset) as i32;
+        let by = (ah as f32 - h as f32 + c.b as f32) as i32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(by));
     }
 
     #[test]
     fn test_translate_pos_topcenter() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
+        let cx = ((aw as f32 - w as f32) / 2.0) as i32;
+        let ty = 0;
         assert_eq!(x, Some(cx));
-        assert_eq!(y, Some(0));
+        assert_eq!(y, Some(ty));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopCenter,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
+        let cx = ((aw as f32 - (w as f32 + b.w() as f32)) / 2.0) as i32;
+        let ty = 0;
         assert_eq!(x, Some(cx));
-        assert_eq!(y, Some(0));
+        assert_eq!(y, Some(ty));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::TopCenter,
+        )
+        .unwrap();
+        let offset = c.w() as f32 / 2.0;
+        let cx = ((aw as f32 - w as f32 - c.w() as f32) / 2.0 + offset) as i32;
+        let by = 0 - c.t as i32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(by));
     }
 
     #[test]
     fn test_translate_pos_rightcenter() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::RightCenter,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
-        assert_eq!(x, Some(lx));
+        let rx = aw as i32 - w as i32;
+        let cy = ((ah as f32 - h as f32) / 2.0) as i32;
+        assert_eq!(x, Some(rx));
         assert_eq!(y, Some(cy));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::RightCenter,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
-        assert_eq!(x, Some(lx));
+        let rx = aw as i32 - w as i32 - b.w() as i32;
+        let cy = ((ah as f32 - (h as f32 + b.h() as f32)) / 2.0) as i32;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, Some(cy));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::RightCenter,
+        )
+        .unwrap();
+        let rx = aw as i32 - w as i32 + b.r as i32;
+        let offset = c.h() as f32 / 2.0;
+        let cy = ((ah as f32 - h as f32 - c.h() as f32) / 2.0 + offset) as i32;
+        assert_eq!(x, Some(rx));
         assert_eq!(y, Some(cy));
     }
 
     #[test]
     fn test_translate_pos_leftcenter() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::LeftCenter,
         )
         .unwrap();
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
-        assert_eq!(x, Some(0));
+        let lx = 0;
+        let cy = ((ah as f32 - h as f32) / 2.0) as i32;
+        assert_eq!(x, Some(lx));
         assert_eq!(y, Some(cy));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::LeftCenter,
         )
         .unwrap();
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
-        assert_eq!(x, Some(0));
+        let lx = 0;
+        let cy = ((ah as f32 - (h as f32 + b.h() as f32)) / 2.0) as i32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(cy));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::LeftCenter,
+        )
+        .unwrap();
+        let lx = 0 - b.l as i32;
+        let offset = c.h() as f32 / 2.0;
+        let cy = ((ah as f32 - h as f32 - c.h() as f32) / 2.0 + offset) as i32;
+        assert_eq!(x, Some(lx));
         assert_eq!(y, Some(cy));
     }
 
     #[test]
     fn test_translate_pos_bottomright() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        let ty = (ah - h - bh) as i32;
-        assert_eq!(x, Some(lx));
-        assert_eq!(y, Some(ty));
+        let rx = aw as i32 - w as i32;
+        let by = (ah - h) as i32;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, Some(by));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        let ty = (ah - h - bh) as i32;
-        assert_eq!(x, Some(lx));
-        assert_eq!(y, Some(ty));
+        let rx = aw as i32 - w as i32 - b.w() as i32;
+        let by = (ah as f32 - h as f32 - b.h() as f32) as i32;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, Some(by));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::BottomRight,
+        )
+        .unwrap();
+        let rx = aw as i32 - w as i32 + b.r as i32;
+        let by = (ah as f32 - h as f32 + c.b as f32) as i32;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, Some(by));
     }
 
     #[test]
     fn test_translate_pos_bottomleft() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomLeft,
         )
         .unwrap();
-        let ty = (ah - h - bh) as i32;
-        assert_eq!(x, Some(0));
-        assert_eq!(y, Some(ty));
+        let lx = 0;
+        let by = (ah - h) as i32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(by));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::BottomLeft,
         )
         .unwrap();
-        let ty = (ah - h - bh) as i32;
-        assert_eq!(x, Some(0));
-        assert_eq!(y, Some(ty));
+        let lx = 0;
+        let by = (ah as f32 - h as f32 - b.h() as f32) as i32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(by));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::BottomLeft,
+        )
+        .unwrap();
+        let lx = 0 - b.l as i32;
+        let by = (ah as f32 - h as f32 + c.b as f32) as i32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(by));
     }
 
     #[test]
     fn test_translate_pos_topright() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        assert_eq!(x, Some(lx));
-        assert_eq!(y, Some(0));
+        let rx = aw as i32 - w as i32;
+        let ty = 0;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, Some(ty));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopRight,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        assert_eq!(x, Some(lx));
-        assert_eq!(y, Some(0));
+        let rx = aw as i32 - w as i32 - b.w() as i32;
+        let ty = 0;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, Some(ty));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::TopRight,
+        )
+        .unwrap();
+        let rx = aw as i32 - w as i32 + b.r as i32;
+        let ty = 0 - c.t as i32;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, Some(ty));
     }
 
     #[test]
     fn test_translate_pos_topleft() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopLeft,
         )
         .unwrap();
-        assert_eq!(x, Some(0));
-        assert_eq!(y, Some(0));
+        let lx = 0;
+        let ty = 0;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(ty));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::TopLeft,
         )
         .unwrap();
-        assert_eq!(x, Some(0));
-        assert_eq!(y, Some(0));
+        let lx = 0;
+        let ty = 0;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(ty));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::TopLeft,
+        )
+        .unwrap();
+        let lx = 0 - b.l as i32;
+        let ty = 0 - c.t as i32;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, Some(ty));
     }
 
     #[test]
     fn test_translate_pos_bottom() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Bottom,
         )
         .unwrap();
-        let ty = (ah - h - bh) as i32;
+        let by = (ah - h) as i32;
         assert_eq!(x, None);
-        assert_eq!(y, Some(ty));
+        assert_eq!(y, Some(by));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Bottom,
         )
         .unwrap();
-        let ty = (ah - h - bh) as i32;
+        let by = (ah as f32 - h as f32 - b.h() as f32) as i32;
         assert_eq!(x, None);
-        assert_eq!(y, Some(ty));
+        assert_eq!(y, Some(by));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Bottom,
+        )
+        .unwrap();
+        let by = (ah as f32 - h as f32 + c.b as f32) as i32;
+        assert_eq!(x, None);
+        assert_eq!(y, Some(by));
     }
 
     #[test]
     fn test_translate_pos_top() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Top,
         )
         .unwrap();
+        let ty = 0;
         assert_eq!(x, None);
-        assert_eq!(y, Some(0));
+        assert_eq!(y, Some(ty));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Top,
         )
         .unwrap();
+        let ty = 0;
         assert_eq!(x, None);
-        assert_eq!(y, Some(0));
+        assert_eq!(y, Some(ty));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Top,
+        )
+        .unwrap();
+        let ty = 0 - c.t as i32;
+        assert_eq!(x, None);
+        assert_eq!(y, Some(ty));
     }
 
     #[test]
     fn test_translate_pos_right() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Right,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        assert_eq!(x, Some(lx));
+        let rx = aw as i32 - w as i32;
+        assert_eq!(x, Some(rx));
         assert_eq!(y, None);
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Right,
         )
         .unwrap();
-        let lx = (aw - w - bw) as i32;
-        assert_eq!(x, Some(lx));
+        let rx = aw as i32 - w as i32 - b.w() as i32;
+        assert_eq!(x, Some(rx));
+        assert_eq!(y, None);
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Right,
+        )
+        .unwrap();
+        let rx = aw as i32 - w as i32 + b.r as i32;
+        assert_eq!(x, Some(rx));
         assert_eq!(y, None);
     }
 
     #[test]
     fn test_translate_pos_left() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Left,
         )
         .unwrap();
-        assert_eq!(x, Some(0));
+        let lx = 0;
+        assert_eq!(x, Some(lx));
         assert_eq!(y, None);
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Left,
         )
         .unwrap();
-        assert_eq!(x, Some(0));
+        let lx = 0;
+        assert_eq!(x, Some(lx));
+        assert_eq!(y, None);
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Left,
+        )
+        .unwrap();
+        let lx = 0 - b.l as i32;
+        assert_eq!(x, Some(lx));
         assert_eq!(y, None);
     }
 
     #[test]
     fn test_translate_pos_center() {
         // No borders
-        let (w, h, bw, bh, cw, ch, aw, ah) = (500.0, 500.0, 0.0, 0.0, 0.0, 0.0, 2560.0, 1415.0);
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &Border::default(),
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Center,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
+        let cx = ((aw as f32 - w as f32) / 2.0) as i32;
+        let cy = ((ah as f32 - h as f32) / 2.0) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(cy));
 
-        // With borders
-        let (w, h, bw, bh, aw, ah) = (500.0, 500.0, 10.0, 10.0, 2560.0, 1415.0);
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
         let (x, y) = translate_pos(
             &Rect::new(w as u32, h as u32),
-            &Border::new(bw as u32, bw as u32, bh as u32, bh as u32),
-            &Border::new(cw as u32, cw as u32, ch as u32, ch as u32),
+            &b,
+            &Border::default(),
             &Rect::new(aw as u32, ah as u32),
             &Position::Center,
         )
         .unwrap();
-        let cx = (aw / 2.0 - (w + bw) / 2.0) as i32;
-        let cy = (ah / 2.0 - (h + bh) / 2.0) as i32;
+        let cx = ((aw as f32 - (w as f32 + b.w() as f32)) / 2.0) as i32;
+        let cy = ((ah as f32 - (h as f32 + b.h() as f32)) / 2.0) as i32;
         assert_eq!(x, Some(cx));
         assert_eq!(y, Some(cy));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Center,
+        )
+        .unwrap();
+        let x_offset = c.w() as f32 / 2.0;
+        let cx = ((aw as f32 - w as f32 - c.w() as f32) / 2.0 + x_offset) as i32;
+        let y_offset = c.h() as f32 / 2.0;
+        let cy = ((ah as f32 - h as f32 - c.h() as f32) / 2.0 + y_offset) as i32;
+        assert_eq!(x, Some(cx));
+        assert_eq!(y, Some(cy));
+    }
+
+    #[test]
+    fn test_translate_pos_static() {
+        // No borders
+        let (aw, ah) = (2560.0, 1415.0);
+        let (w, h) = (500.0, 500.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &Border::default(),
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Static(10, 10),
+        )
+        .unwrap();
+        assert_eq!(x, Some(10));
+        assert_eq!(y, Some(10));
+
+        // With WM borders
+        let b = Border::new(10, 10, 10, 10);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &b,
+            &Border::default(),
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Static(10, 10),
+        )
+        .unwrap();
+        assert_eq!(x, Some(10));
+        assert_eq!(y, Some(10));
+
+        // With CSD borders
+        let c = Border::new(10, 10, 10, 10);
+        let (w, h) = (480.0, 480.0);
+        let (x, y) = translate_pos(
+            &Rect::new(w as u32, h as u32),
+            &Border::default(),
+            &c,
+            &Rect::new(aw as u32, ah as u32),
+            &Position::Static(10, 10),
+        )
+        .unwrap();
+        assert_eq!(x, Some(0));
+        assert_eq!(y, Some(0));
     }
 }

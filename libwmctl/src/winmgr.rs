@@ -512,7 +512,7 @@ impl WinMgr {
         // Account for CSD borders
         let mut is_gtk = false;
         if let Ok(b) = self.window_gtk_borders(id) {
-            if b.l > 0 || b.r > 0 || b.t > 0 || b.b > 0 {
+            if b.any() {
                 w = w - b.l - b.r;
                 h = h - b.t - b.b;
                 x = x + b.l as i32;
@@ -796,8 +796,12 @@ impl WinMgr {
     pub(crate) fn move_resize_window(
         &self, id: u32, gravity: Option<u32>, x: Option<i32>, y: Option<i32>, w: Option<u32>, h: Option<u32>,
     ) -> WmCtlResult<()> {
-        self.conn.configure_window(id, &ConfigureWindowAux::new().x(x).y(y).width(w).height(h))?;
+        self.conn.configure_window(id, &ConfigureWindowAux::new().width(w).height(h).x(x).y(y))?;
         self.conn.flush()?; // Requires the flush to work
+
+        //std::thread::sleep(std::time::Duration::from_millis(3000));
+        //self.conn.configure_window(id, &ConfigureWindowAux::new().width(w).height(h).x(x).y(y))?;
+        //self.conn.flush()?; // Requires the flush to work
 
         // Old implementation below doesn't allow for negative (x, y) coordinates
         // ----------------------------------------------------------------

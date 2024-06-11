@@ -14,8 +14,6 @@ mod property;
 mod shape;
 mod state;
 
-use std::any;
-
 // Export contents of modules
 pub use class::*;
 pub use gravity::*;
@@ -80,16 +78,4 @@ impl Rect {
     pub fn new(w: u32, h: u32) -> Self {
         Self { w, h }
     }
-}
-
-/// Coord provides a simple way to store x, y coordinates
-pub struct Coord {
-    pub x: u32,
-    pub y: u32,
-}
-
-/// CoordOpt provides a simple way to store optional x, y coordinates
-pub struct CoordOpt {
-    pub x: Option<u32>,
-    pub y: Option<u32>,
 }
