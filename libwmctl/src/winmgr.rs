@@ -799,12 +799,8 @@ impl WinMgr {
         self.conn.configure_window(id, &ConfigureWindowAux::new().width(w).height(h).x(x).y(y))?;
         self.conn.flush()?; // Requires the flush to work
 
-        //std::thread::sleep(std::time::Duration::from_millis(3000));
-        //self.conn.configure_window(id, &ConfigureWindowAux::new().width(w).height(h).x(x).y(y))?;
-        //self.conn.flush()?; // Requires the flush to work
-
-        // Old implementation below doesn't allow for negative (x, y) coordinates
-        // ----------------------------------------------------------------
+        // // Old implementation below doesn't allow for negative (x, y) coordinates
+        // // ----------------------------------------------------------------
         // // Construct the move resize message
         // // Gravity is defined as the lower byte of the move resize flags 32bit value
         // // https://tronche.com/gui/x/xlib/window/attributes/gravity.html
@@ -833,10 +829,16 @@ impl WinMgr {
         //     32,
         //     id,
         //     self.atoms._NET_MOVERESIZE_WINDOW,
-        //     [flags, x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0)],
+        //     [
+        //         flags,
+        //         x.and_then(|x| if x < 0 { Some(0 as u32) } else { Some(x as u32) }).unwrap_or(0),
+        //         y.and_then(|y| if y < 0 { Some(0 as u32) } else { Some(y as u32) }).unwrap_or(0),
+        //         w.unwrap_or(0),
+        //         h.unwrap_or(0),
+        //     ],
         // ))?;
 
-        debug!("move_resize: id: {}, g: {:?}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", id, gravity, x, y, w, h);
+        println!("move_resize: id: {}, g: {:?}, x: {:?}, y: {:?}, w: {:?}, h: {:?}", id, gravity, x, y, w, h);
         Ok(())
     }
 

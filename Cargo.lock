@@ -322,18 +322,18 @@ dependencies = [
 [[package]]
 name = "libwmctl"
 version = "0.0.50"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc1d436f376499c4d1317c0066e0665402afbddc882b985262e2dd29b4e41892"
 dependencies = [
- "prettytable",
  "tracing",
  "x11rb",
 ]
 
 [[package]]
 name = "libwmctl"
-version = "0.0.50"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc1d436f376499c4d1317c0066e0665402afbddc882b985262e2dd29b4e41892"
+version = "0.0.51"
 dependencies = [
+ "prettytable",
  "tracing",
  "x11rb",
 ]
@@ -901,12 +901,12 @@ dependencies = [
 
 [[package]]
 name = "wmctl"
-version = "0.0.50"
+version = "0.0.51"
 dependencies = [
  "chrono",
  "clap",
  "gory",
- "libwmctl 0.0.50 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libwmctl 0.0.50",
  "prettytable",
  "tracing",
  "tracing-subscriber",

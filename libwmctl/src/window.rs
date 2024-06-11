@@ -306,12 +306,20 @@ impl Window {
         let border = self.borders();
         let csd_border = self.gtk_borders();
         let (_, _, w, h) = self.geometry()?;
-        let size = Rect::new(w, h);
+        let mut size = Rect::new(w, h);
         let area = Rect::new(wm.work_width, wm.work_height);
 
         // Shape the window as directed
         let (gravity, sw, sh) = if let Some(shape) = self.shape.as_ref() {
             let (gravity, sw, sh) = translate_shape(&size, &border, &csd_border, &area, shape)?;
+
+            // Update size with translated changes for positioning
+            if let Some(w) = sw {
+                size.w = w;
+            }
+            if let Some(h) = sh {
+                size.h = h;
+            }
 
             // Don't use gravity if positioning is required
             if self.pos.is_some() {

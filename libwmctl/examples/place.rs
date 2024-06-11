@@ -3,8 +3,8 @@ use libwmctl::prelude::*;
 // Resize active window to half the screen size then position it to the right
 fn main() {
     //let win = active();
-    let win = first_by_class("firefox").unwrap();
-    win.shape(Shape::Halfw).pos(Position::TopRight).place().unwrap();
+    let win = first_by_class("alacritty").unwrap();
+    win.shape(Shape::Large).pos(Position::TopRight).place().unwrap();
 
     //let win = first_by_class("alacritty").unwrap();
     //win.pos(Position::Bottom).place().unwrap();
