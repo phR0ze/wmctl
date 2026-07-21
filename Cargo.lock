@@ -361,6 +361,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libwmctl"
+version = "0.0.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e87e0ffb5592f97531e94f6b818a516d936889d57b88f474da9697d10981b2e"
+dependencies = [
+ "tracing",
+ "x11rb",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -876,7 +886,7 @@ dependencies = [
  "chrono",
  "clap",
  "gory",
- "libwmctl",
+ "libwmctl 0.0.52 (registry+https://github.com/rust-lang/crates.io-index)",
  "prettytable",
  "tracing",
  "tracing-subscriber",
