@@ -9,7 +9,7 @@ use witcher::prelude::*;
 /// * `global` - the ArgMatches object for the global arguments
 pub fn run(global: &ArgMatches) -> Result<()> {
     let matches = global.subcommand_matches("list").unwrap();
-    windows(matches.is_present("all"))
+    windows(matches.get_flag("all"))
 }
 
 // List all windows

@@ -15,16 +15,16 @@ fn fatal(msg: &str) {
 /// * `matches` - the ArgMatches object to search
 /// * `active` - if true, get the active window if no other method is given
 pub fn get_window_id(matches: &ArgMatches, active: bool) -> u32 {
-    let mut id = if matches.is_present("window") {
-        let id = matches.value_of("window").unwrap().parse::<u32>().ok();
+    let mut id = if let Some(window) = matches.get_one::<String>("window") {
+        let id = window.parse::<u32>().ok();
         if id.is_none() {
-            fatal(&format!("Invalid Window identifier: {}", matches.value_of("window").unwrap()));
+            fatal(&format!("Invalid Window identifier: {}", window));
         }
         id
-    } else if matches.is_present("class") {
-        let id = matches.value_of("class").and_then(|x| libwmctl::first_by_class(x).and_then(|x| Some(x.id)));
+    } else if let Some(class) = matches.get_one::<String>("class") {
+        let id = libwmctl::first_by_class(class).map(|x| x.id);
         if id.is_none() {
-            fatal(&format!("Not found Window class: {}", matches.value_of("class").unwrap()));
+            fatal(&format!("Not found Window class: {}", class));
         }
         id
     } else {

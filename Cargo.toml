@@ -1,7 +1,7 @@
 [package]
 name = "wmctl"
 version = "0.0.51"
-edition = "2021"
+edition = "2024"
 authors = ["phR0ze"]
 license = "MIT OR Apache-2.0"
 description = "Rust X11 automation"
@@ -35,12 +35,12 @@ debug = false # Provide debug symbols for Witcher
 opt-level = 0 # Default no optimization
 
 [dependencies]
-clap = "2.33"
+clap = { version = "4", features = ["string"] }
 gory = "0.1"
 tracing = "0.1"
 witcher = "0.1.19"
-#libwmctl = "0.0.52"
-libwmctl = { path = "libwmctl" }
+libwmctl = "0.0.52"
+#libwmctl = { path = "libwmctl" }
 tracing-subscriber = "0.3"
 prettytable = "0.10.0"
 

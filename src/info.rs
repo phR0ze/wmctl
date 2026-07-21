@@ -12,7 +12,7 @@ pub fn run(global: &ArgMatches) {
     let matches = global.subcommand_matches("info").unwrap();
 
     if let Some(matches) = matches.subcommand_matches("winmgr") {
-        winmgr(matches.is_present("all"));
+        winmgr(matches.get_flag("all"));
     } else {
         window(utils::get_window_id(global, true));
     }
