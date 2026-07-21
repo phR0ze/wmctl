@@ -39,8 +39,8 @@ clap = "2.33"
 gory = "0.1"
 tracing = "0.1"
 witcher = "0.1.19"
-libwmctl = "0.0.51"
-#libwmctl = { path = "libwmctl" }
+#libwmctl = "0.0.52"
+libwmctl = { path = "libwmctl" }
 tracing-subscriber = "0.3"
 prettytable = "0.10.0"
 
