@@ -18,7 +18,18 @@ ways the WM itself may not support natively). The repo is a Cargo workspace:
 path dependency in the root `Cargo.toml` is commented out — uncomment it when developing both
 crates together in lockstep).
 
+## Development environment
+
+This is developed on NixOS. Use `nix develop` to enter the dev shell defined in `flake.nix`
+before running any `cargo`/`rustc` commands — it provides the pinned Rust toolchain (`cargo`,
+`rustc`, `rustfmt`, `clippy`, `rust-analyzer`) and `git` (needed by `build.rs`, see below). The
+`nixpkgs` input is pinned to the same commit used in `~/Projects/nixos-config`, so update both
+together if you bump it. Don't rely on any system-wide/global Rust install; if `cargo`/`rustc`
+aren't on `PATH`, run `nix develop` first.
+
 ## Common commands
+
+All of the below assume you're inside `nix develop` (or prefix with `nix develop -c <cmd>`).
 
 ```bash
 # Build everything (workspace)
