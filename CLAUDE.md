@@ -4,31 +4,12 @@
 
 `wmctl` is a Rust CLI for X11 window manipulation, implementing a subset of the EWMH/ICCCM specs
 so it can work alongside any EWMH-compatible window manager (shaping and positioning windows in
-ways the WM itself may not support natively). The repo is a Cargo workspace:
-
-- `libwmctl/` — the library crate (`x11rb` is its only runtime dependency). Does the actual X11
-  protocol work: connecting, reading/writing window properties, sending client messages.
-- `src/` (crate `wmctl`) — the CLI binary. Thin `clap`-based wrapper around `libwmctl` that maps
-  subcommands (`move`, `shape`, `place`, `static`, `list`, `info`) to library calls.
-
-`libwmctl` is published and versioned independently on crates.io and is usable standalone (see
-`libwmctl/examples/`); `wmctl` depends on the published version of `libwmctl` by default (the
-path dependency in the root `Cargo.toml` is commented out — uncomment it when developing both
-crates together in lockstep).
+ways the WM itself may not support natively).
 
 ## Development environment
 
 This is developed on NixOS. Use `nix develop` to enter the dev shell defined in `flake.nix`
-before running any `cargo`/`rustc` commands — it provides the pinned Rust toolchain (`cargo`,
-`rustc`, `rustfmt`, `clippy`, `rust-analyzer`) and `git` (needed by `build.rs`, see below). The
-`nixpkgs` input is pinned to the same commit used in `~/Projects/nixos-config`, so update both
-together if you bump it. Don't rely on any system-wide/global Rust install; if `cargo`/`rustc`
-aren't on `PATH`, run `nix develop` first.
-
-There is no automated test suite — verification is done manually against a running X11 session
-via the CLI or the `libwmctl/examples/*.rs` binaries, since correctness depends on real window
-manager behavior. When changing `libwmctl` internals, prefer exercising the relevant example
-under an actual X session over trying to unit test X11 protocol interactions.
+before running any `cargo`/`rustc`/`rustfmt`/`clippy`/`rust-analyzer` commands.
 
 ### Testing a `libwmctl` change against the CLI before publishing
 
@@ -46,5 +27,3 @@ to crates.io — but you can build/run the CLI against your local `libwmctl` fir
 
 Don't leave the CLI pointed at the path dependency long-term — it's a local build check, not the
 intended default wiring.
-
-
