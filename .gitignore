@@ -1,8 +1,8 @@
 /target/
 **/*.rs.bk
 tests/temp/
-config/package/src
-config/package/pkg
-config/package/*.tar.gz
-config/package/*.tar.zst
+config/archlinux/src
+config/archlinux/pkg
+config/archlinux/*.tar.gz
+config/archlinux/*.tar.zst
 bin/
